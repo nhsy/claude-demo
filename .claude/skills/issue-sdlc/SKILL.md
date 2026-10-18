@@ -14,7 +14,9 @@ branch lands on main as written. Make small, self-contained commits
 that each build and pass `task test`, with messages in the format
 CLAUDE.md gives. Never create merge commits: no `git merge`, always
 `git pull --rebase`, and `git rebase origin/main` to catch up with main.
-Never leave WIP or fixup commits on the branch.
+Never leave WIP or fixup commits on the branch. Stage files by name
+(`git add path/to/file`); never stage everything at once (`git add .`,
+`-A`, `--all`, `-u`, or `git commit -a`): those are denied.
 
 ## Tests in this repo
 

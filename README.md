@@ -106,7 +106,7 @@ Labels, the definition of ready, and branch and commit conventions are in [CLAUD
 2. Protect `main` with a branch protection rule or ruleset that requires a review, passing checks and linear history (linear history rejects any PR containing a merge commit).
 3. In Claude Code: `/plugin install code-review@claude-plugins-official` and `/plugin install pr-review-toolkit@claude-plugins-official`.
 
-`.claude/settings.json` lets the skill run routine `gh`, `git` and `task` commands without prompting, and denies merging PRs, closing issues, merge commits and pushes or force-pushes to `main`.
+`.claude/settings.json` lets the skill run routine `gh`, `git` and `task` commands without prompting, and denies merging PRs, closing issues, merge commits, pushes or force-pushes to `main`, and staging everything at once (`git add .`, `-A`, `--all`, `-u`, `git commit -a`): files are staged by name.
 
 **Review and merge:** for a second opinion, open a fresh Claude Code session on the PR branch and run `/pr-review-toolkit:review-pr` or `/code-review`. To ask for changes, submit a GitHub review with "Request changes"; the next `/issue-sdlc` run picks the PR up first. When you're satisfied, mark the PR ready, approve it and use **Rebase and merge**. If a session dies mid-stage, remove `agent-working` from the issue by hand.
 
