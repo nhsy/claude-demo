@@ -93,7 +93,7 @@ Claude Code works labelled GitHub issues through the SDLC from your terminal: re
 
 ```
 agent-ready ─▶ /issue-sdlc plans ─▶ agent-plan-review ─▶ (you approve) agent-build
-            ─▶ /issue-sdlc builds ─▶ draft PR, agent-review ─▶ (you review: request changes ⟲ /issue-sdlc fixes)
+            ─▶ /issue-sdlc builds ─▶ draft PR, agent-pr-review ─▶ (you review: request changes ⟲ /issue-sdlc fixes)
             ─▶ (you) Rebase and merge, which closes the issue
 any stage ─▶ agent-blocked (question or failed run) ─▶ answer, then re-add agent-ready
 ```
@@ -102,7 +102,7 @@ Labels, the definition of ready, and branch and commit conventions are in [CLAUD
 
 **One-time setup** (needs `gh` signed in with admin rights on the repo):
 
-1. `task github:setup`: creates the six `agent-*` labels with colours and descriptions (rerunning resets them) and allows rebase merging only.
+1. `task github:setup`: creates the six `agent-*` labels with colours and descriptions (rerunning resets them), allows rebase merging only and turns on branch auto-delete. It uses only the REST API (`gh api`), so it also works where GitHub GraphQL is blocked, as in Claude Code cloud sessions.
 2. Protect `main` with a branch protection rule or ruleset that requires a review, passing checks and linear history (linear history rejects any PR containing a merge commit).
 3. In Claude Code: `/plugin install code-review@claude-plugins-official` and `/plugin install pr-review-toolkit@claude-plugins-official`.
 
