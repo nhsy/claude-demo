@@ -15,7 +15,7 @@ def run(tmp_path, *argv):
     return code, sorted(tmp_path.glob("*.json"))
 
 
-@pytest.mark.parametrize(("command", "kind"), [("audit", "posture"), ("quotas", "quotas"), ("security", "security")])
+@pytest.mark.parametrize(("command", "kind"), [("audit", "posture"), ("quotas", "quotas"), ("security", "security"), ("roles", "roles"), ("pki", "pki")])
 def test_writes_one_private_file_and_prints_its_path(fake_vault, tmp_path, capsys, command, kind):
     out_dir = tmp_path / "results"
     code, _ = run(out_dir, command)
@@ -36,10 +36,14 @@ def test_audit_document_matches_schema_and_expected_findings(fake_vault, tmp_pat
     assert document["run"]["vault_addr"] == "http://vault.test:8200"
     assert document["coverage"]["complete"] is True
     assert document["summary"]["by_rule"] == {
+        "VP-PKI-002": 1,
+        "VP-PKI-004": 1,
         "VP-PLUG-001": 1,
         "VP-PLUG-002": 1,
         "VP-QUOTA-003": 1,
         "VP-QUOTA-004": 1,
+        "VP-ROLE-002": 1,
+        "VP-ROLE-005": 1,
         "VP-SEC-001": 1,
         "VP-SEC-002": 1,
         "VP-SEC-003": 1,

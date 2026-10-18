@@ -1,0 +1,845 @@
+{
+  "run": {
+    "tool": "vault-posture",
+    "tool_version": "0.2.0",
+    "schema_version": "1.1.0",
+    "generated_at": "2026-10-18T13:06:03Z",
+    "cluster_name": "vault-cluster-d224edaa",
+    "vault_addr": "<redacted>",
+    "vault_version": "2.1.1",
+    "edition": "community",
+    "start_namespace": "/"
+  },
+  "coverage": {
+    "complete": false,
+    "scopes": [
+      {
+        "namespace": "/",
+        "scope": "auth",
+        "status": "ok"
+      },
+      {
+        "namespace": "/",
+        "scope": "mounts",
+        "status": "denied"
+      },
+      {
+        "namespace": "/",
+        "scope": "namespaces",
+        "status": "unsupported"
+      },
+      {
+        "namespace": "/",
+        "scope": "quotas.config",
+        "status": "ok"
+      },
+      {
+        "namespace": "/",
+        "scope": "quotas.lease-count",
+        "status": "unsupported"
+      },
+      {
+        "namespace": "/",
+        "scope": "quotas.rate-limit",
+        "status": "ok"
+      },
+      {
+        "namespace": "/",
+        "scope": "quotas.rate-limit.userpass-login",
+        "status": "ok"
+      },
+      {
+        "namespace": "/",
+        "scope": "roles.approle/",
+        "status": "ok"
+      },
+      {
+        "namespace": "/",
+        "scope": "roles.approle/forever-secret",
+        "status": "ok"
+      },
+      {
+        "namespace": "/",
+        "scope": "roles.approle/role-id-only",
+        "status": "ok"
+      },
+      {
+        "namespace": "/",
+        "scope": "roles.jwt/",
+        "status": "ok"
+      },
+      {
+        "namespace": "/",
+        "scope": "roles.jwt/break-glass",
+        "status": "ok"
+      },
+      {
+        "namespace": "/",
+        "scope": "roles.jwt/ci-audience-only",
+        "status": "ok"
+      },
+      {
+        "namespace": "/",
+        "scope": "roles.jwt/ci-wildcard",
+        "status": "ok"
+      },
+      {
+        "namespace": "/",
+        "scope": "roles.jwt/sso",
+        "status": "ok"
+      },
+      {
+        "namespace": "/",
+        "scope": "roles.kubernetes/",
+        "status": "ok"
+      },
+      {
+        "namespace": "/",
+        "scope": "roles.kubernetes/any-ns",
+        "status": "ok"
+      },
+      {
+        "namespace": "/",
+        "scope": "roles.kubernetes/any-pod",
+        "status": "ok"
+      },
+      {
+        "namespace": "/",
+        "scope": "roles.kubernetes/scoped",
+        "status": "ok"
+      },
+      {
+        "namespace": "/",
+        "scope": "roles.token/",
+        "status": "ok"
+      },
+      {
+        "namespace": "/",
+        "scope": "roles.token/ops-root",
+        "status": "ok"
+      },
+      {
+        "namespace": "/",
+        "scope": "security.generate_recovery_token",
+        "status": "not_applicable"
+      },
+      {
+        "namespace": "/",
+        "scope": "security.generate_root",
+        "status": "ok"
+      },
+      {
+        "namespace": "/",
+        "scope": "security.key_status",
+        "status": "ok"
+      },
+      {
+        "namespace": "/",
+        "scope": "security.plugin_catalog",
+        "status": "ok"
+      },
+      {
+        "namespace": "/",
+        "scope": "security.rekey",
+        "status": "ok"
+      },
+      {
+        "namespace": "/",
+        "scope": "security.rekey_recovery",
+        "status": "not_applicable"
+      },
+      {
+        "namespace": "/",
+        "scope": "security.rotate_config",
+        "status": "ok"
+      }
+    ]
+  },
+  "summary": {
+    "total": 17,
+    "by_severity": {
+      "high": 4,
+      "medium": 5,
+      "low": 5,
+      "info": 3
+    },
+    "by_rule": {
+      "VP-PLUG-001": 1,
+      "VP-PLUG-002": 1,
+      "VP-QUOTA-003": 1,
+      "VP-QUOTA-004": 1,
+      "VP-ROLE-001": 2,
+      "VP-ROLE-002": 1,
+      "VP-ROLE-003": 1,
+      "VP-ROLE-004": 1,
+      "VP-ROLE-005": 1,
+      "VP-ROLE-006": 1,
+      "VP-ROLE-007": 1,
+      "VP-ROLE-008": 1,
+      "VP-ROLE-009": 1,
+      "VP-SEC-001": 1,
+      "VP-SEC-002": 1,
+      "VP-SEC-004": 1
+    }
+  },
+  "findings": [
+    {
+      "fingerprint": "368882d27b8dec53",
+      "rule_id": "VP-ROLE-001",
+      "severity": "high",
+      "category": "roles",
+      "title": "Role can issue tokens with the root policy",
+      "namespace": "/",
+      "object": {
+        "kind": "jwt_role",
+        "path": "auth/jwt/role/break-glass"
+      },
+      "detail": "Logging in through jwt role 'break-glass' yields a root token.",
+      "evidence": {
+        "mount": "jwt/",
+        "role": "break-glass",
+        "token_policies": [
+          "root"
+        ]
+      }
+    },
+    {
+      "fingerprint": "f71ccca069c0b05b",
+      "rule_id": "VP-ROLE-001",
+      "severity": "high",
+      "category": "roles",
+      "title": "Role can issue tokens with the root policy",
+      "namespace": "/",
+      "object": {
+        "kind": "token_role",
+        "path": "auth/token/roles/ops-root"
+      },
+      "detail": "Token role 'ops-root' allows creating tokens with the root policy.",
+      "evidence": {
+        "allowed_policies": [
+          "root"
+        ],
+        "allowed_policies_glob": [],
+        "mount": "token/",
+        "role": "ops-root"
+      }
+    },
+    {
+      "fingerprint": "c9e51cbb64e22717",
+      "rule_id": "VP-ROLE-005",
+      "severity": "high",
+      "category": "roles",
+      "title": "Kubernetes role accepts any service account in any namespace",
+      "namespace": "/",
+      "object": {
+        "kind": "kubernetes_role",
+        "path": "auth/kubernetes/role/any-pod"
+      },
+      "detail": "Kubernetes role 'any-pod' accepts every service account in every namespace of the cluster.",
+      "evidence": {
+        "mount": "kubernetes/",
+        "role": "any-pod"
+      }
+    },
+    {
+      "fingerprint": "5fa68cf4e6f08b92",
+      "rule_id": "VP-SEC-001",
+      "severity": "high",
+      "category": "security",
+      "title": "A root or recovery token generation is in progress",
+      "namespace": "/",
+      "object": {
+        "kind": "seal_operation",
+        "path": "sys/generate-root/attempt"
+      },
+      "detail": "A root token generation is in progress (0 of 1 key shares provided).",
+      "evidence": {
+        "operation": "root token generation",
+        "progress": 0,
+        "required": 1
+      }
+    },
+    {
+      "fingerprint": "1b44e6a2e2b21318",
+      "rule_id": "VP-ROLE-002",
+      "severity": "medium",
+      "category": "roles",
+      "title": "JWT role is bound only by audience",
+      "namespace": "/",
+      "object": {
+        "kind": "jwt_role",
+        "path": "auth/jwt/role/ci-audience-only"
+      },
+      "detail": "JWT role 'ci-audience-only' checks only the audience: any token the issuer mints for that audience can log in.",
+      "evidence": {
+        "bound_audiences": [
+          "https://github.com/acme"
+        ],
+        "mount": "jwt/",
+        "role": "ci-audience-only"
+      }
+    },
+    {
+      "fingerprint": "285caba7a7d9731f",
+      "rule_id": "VP-ROLE-003",
+      "severity": "medium",
+      "category": "roles",
+      "title": "JWT/OIDC role binds claims with a wildcard",
+      "namespace": "/",
+      "object": {
+        "kind": "jwt_role",
+        "path": "auth/jwt/role/ci-wildcard"
+      },
+      "detail": "Role 'ci-wildcard' matches bound claims with wildcards: repository.",
+      "evidence": {
+        "mount": "jwt/",
+        "role": "ci-wildcard",
+        "wildcard_claims": {
+          "repository": [
+            "acme/*"
+          ]
+        }
+      }
+    },
+    {
+      "fingerprint": "99462797a5782afe",
+      "rule_id": "VP-ROLE-006",
+      "severity": "medium",
+      "category": "roles",
+      "title": "Kubernetes role accepts any service account name or any namespace",
+      "namespace": "/",
+      "object": {
+        "kind": "kubernetes_role",
+        "path": "auth/kubernetes/role/any-ns"
+      },
+      "detail": "Kubernetes role 'any-ns' accepts any namespace.",
+      "evidence": {
+        "any_namespace": true,
+        "any_service_account": false,
+        "mount": "kubernetes/",
+        "role": "any-ns"
+      }
+    },
+    {
+      "fingerprint": "4d0899e2f790603c",
+      "rule_id": "VP-ROLE-007",
+      "severity": "medium",
+      "category": "roles",
+      "title": "AppRole role does not require a secret ID",
+      "namespace": "/",
+      "object": {
+        "kind": "approle_role",
+        "path": "auth/approle/role/role-id-only"
+      },
+      "detail": "AppRole 'role-id-only' logs in with the role ID alone; the role ID becomes a static password.",
+      "evidence": {
+        "mount": "approle/",
+        "role": "role-id-only",
+        "secret_id_bound_cidrs": [
+          "10.0.0.0/8"
+        ],
+        "token_bound_cidrs": []
+      }
+    },
+    {
+      "fingerprint": "40075ef31f84638e",
+      "rule_id": "VP-SEC-002",
+      "severity": "medium",
+      "category": "security",
+      "title": "A rekey of the unseal or recovery keys is in progress",
+      "namespace": "/",
+      "object": {
+        "kind": "seal_operation",
+        "path": "sys/rekey/init"
+      },
+      "detail": "A unseal key rekey is in progress (0 of 1 key shares provided).",
+      "evidence": {
+        "operation": "unseal key rekey",
+        "progress": 0,
+        "required": 1
+      }
+    },
+    {
+      "fingerprint": "fc6ebb103f9ad529",
+      "rule_id": "VP-PLUG-001",
+      "severity": "low",
+      "category": "plugins",
+      "title": "External plugin is registered without a version",
+      "namespace": "/",
+      "object": {
+        "kind": "plugin",
+        "path": "secret/posture-dummy"
+      },
+      "detail": "External secret plugin 'posture-dummy' is registered without a version, so upgrades and pinning can't be tracked.",
+      "evidence": {
+        "plugin_name": "posture-dummy",
+        "plugin_type": "secret"
+      }
+    },
+    {
+      "fingerprint": "cb77182a9c930a60",
+      "rule_id": "VP-QUOTA-003",
+      "severity": "low",
+      "category": "quotas",
+      "title": "Quotas exist but none applies to the whole cluster",
+      "namespace": "/",
+      "object": {
+        "kind": "quota_type",
+        "path": "rate-limit"
+      },
+      "detail": "1 rate-limit quota(s) exist, but all are scoped to a path, namespace or role; nothing caps the rest of the cluster.",
+      "evidence": {
+        "paths": [
+          "auth/userpass/"
+        ],
+        "quota_type": "rate-limit",
+        "quotas": 1
+      }
+    },
+    {
+      "fingerprint": "7af1d9cdd9e340c0",
+      "rule_id": "VP-ROLE-004",
+      "severity": "low",
+      "category": "roles",
+      "title": "OIDC role logs tokens and claims verbosely",
+      "namespace": "/",
+      "object": {
+        "kind": "jwt_role",
+        "path": "auth/jwt/role/sso"
+      },
+      "detail": "Role 'sso' writes ID tokens and claims to the server log (verbose_oidc_logging).",
+      "evidence": {
+        "mount": "jwt/",
+        "role": "sso"
+      }
+    },
+    {
+      "fingerprint": "2b6e152858bb675c",
+      "rule_id": "VP-ROLE-008",
+      "severity": "low",
+      "category": "roles",
+      "title": "AppRole secret IDs never expire",
+      "namespace": "/",
+      "object": {
+        "kind": "approle_role",
+        "path": "auth/approle/role/forever-secret"
+      },
+      "detail": "AppRole 'forever-secret' issues secret IDs that never expire.",
+      "evidence": {
+        "mount": "approle/",
+        "role": "forever-secret",
+        "secret_id_num_uses": 0
+      }
+    },
+    {
+      "fingerprint": "d8c61ce950f5483c",
+      "rule_id": "VP-ROLE-009",
+      "severity": "low",
+      "category": "roles",
+      "title": "Role issues periodic tokens with no explicit max TTL",
+      "namespace": "/",
+      "object": {
+        "kind": "approle_role",
+        "path": "auth/approle/role/forever-secret"
+      },
+      "detail": "Role 'forever-secret' issues periodic tokens (period 86400s) with no explicit max TTL, so they can be renewed forever.",
+      "evidence": {
+        "mount": "approle/",
+        "orphan": null,
+        "period_seconds": 86400,
+        "role": "forever-secret"
+      }
+    },
+    {
+      "fingerprint": "3c172b6543e980b6",
+      "rule_id": "VP-PLUG-002",
+      "severity": "info",
+      "category": "plugins",
+      "title": "External (non-builtin) plugins are registered",
+      "namespace": "/",
+      "object": {
+        "kind": "plugin_catalog",
+        "path": "sys/plugins/catalog"
+      },
+      "detail": "1 external plugin(s) are registered; each runs third-party code inside Vault's trust boundary.",
+      "evidence": {
+        "count": 1,
+        "plugins": [
+          "secret/posture-dummy"
+        ]
+      }
+    },
+    {
+      "fingerprint": "1d14fc9c2056c4d1",
+      "rule_id": "VP-QUOTA-004",
+      "severity": "info",
+      "category": "quotas",
+      "title": "Requests rejected by rate-limit quotas are not audit-logged",
+      "namespace": "/",
+      "object": {
+        "kind": "quota_config",
+        "path": "sys/quotas/config"
+      },
+      "detail": "Rate-limit quotas are defined, but requests they reject are not written to the audit log.",
+      "evidence": {
+        "rate_limit_quotas": 1
+      }
+    },
+    {
+      "fingerprint": "039453591a591228",
+      "rule_id": "VP-SEC-004",
+      "severity": "info",
+      "category": "security",
+      "title": "Time-based automatic barrier key rotation is disabled",
+      "namespace": "/",
+      "object": {
+        "kind": "barrier_key",
+        "path": "sys/rotate/config"
+      },
+      "detail": "Automatic barrier key rotation has no time interval; the key only rotates on the operation-count limit or by hand.",
+      "evidence": {
+        "enabled": true,
+        "interval_seconds": 0,
+        "max_operations": 3865470566
+      }
+    }
+  ],
+  "data": {
+    "quotas": {
+      "config": {
+        "enable_rate_limit_audit_logging": false,
+        "enable_rate_limit_response_headers": false
+      },
+      "rate_limit": [
+        {
+          "name": "userpass-login",
+          "type": "rate-limit",
+          "path": "auth/userpass/",
+          "role": "",
+          "rate": 50,
+          "interval": 1,
+          "block_interval": 0,
+          "inheritable": false,
+          "group_by": "ip"
+        }
+      ],
+      "lease_count": null
+    },
+    "security": {
+      "generate_root": {
+        "started": true,
+        "progress": 0,
+        "required": 1
+      },
+      "generate_recovery_token": null,
+      "rekey": {
+        "started": true,
+        "progress": 0,
+        "required": 1
+      },
+      "rekey_recovery": null,
+      "key_status": {
+        "term": 1,
+        "install_time": "2026-10-18T12:57:24.603099154Z",
+        "encryptions": 148
+      },
+      "rotate_config": {
+        "enabled": true,
+        "interval": 0,
+        "max_operations": 3865470566
+      },
+      "external_plugins": [
+        {
+          "name": "posture-dummy",
+          "type": "secret",
+          "version": "",
+          "builtin": false
+        }
+      ]
+    },
+    "roles": {
+      "namespaces": [
+        "/"
+      ],
+      "roles": [
+        {
+          "namespace": "/",
+          "mount": "approle/",
+          "type": "approle",
+          "name": "forever-secret",
+          "config": {
+            "bind_secret_id": true,
+            "secret_id_bound_cidrs": null,
+            "secret_id_num_uses": 0,
+            "secret_id_ttl": 0,
+            "local_secret_ids": false,
+            "token_policies": [
+              "app"
+            ],
+            "token_ttl": 0,
+            "token_max_ttl": 0,
+            "token_explicit_max_ttl": 0,
+            "token_period": 86400,
+            "token_type": "default",
+            "token_bound_cidrs": [],
+            "token_num_uses": 0,
+            "token_no_default_policy": false
+          }
+        },
+        {
+          "namespace": "/",
+          "mount": "approle/",
+          "type": "approle",
+          "name": "role-id-only",
+          "config": {
+            "bind_secret_id": false,
+            "secret_id_bound_cidrs": [
+              "10.0.0.0/8"
+            ],
+            "secret_id_num_uses": 0,
+            "secret_id_ttl": 0,
+            "local_secret_ids": false,
+            "token_policies": [
+              "app"
+            ],
+            "token_ttl": 0,
+            "token_max_ttl": 0,
+            "token_explicit_max_ttl": 0,
+            "token_period": 0,
+            "token_type": "default",
+            "token_bound_cidrs": [],
+            "token_num_uses": 0,
+            "token_no_default_policy": false
+          }
+        },
+        {
+          "namespace": "/",
+          "mount": "jwt/",
+          "type": "jwt",
+          "name": "break-glass",
+          "config": {
+            "role_type": "jwt",
+            "bound_audiences": null,
+            "bound_subject": "repo:acme/ops:ref:refs/heads/main",
+            "bound_claims": null,
+            "bound_claims_type": "string",
+            "user_claim": "sub",
+            "groups_claim": "",
+            "allowed_redirect_uris": null,
+            "verbose_oidc_logging": false,
+            "token_policies": [
+              "root"
+            ],
+            "token_ttl": 0,
+            "token_max_ttl": 0,
+            "token_explicit_max_ttl": 0,
+            "token_period": 0,
+            "token_type": "default",
+            "token_bound_cidrs": [],
+            "token_num_uses": 0,
+            "token_no_default_policy": false
+          }
+        },
+        {
+          "namespace": "/",
+          "mount": "jwt/",
+          "type": "jwt",
+          "name": "ci-audience-only",
+          "config": {
+            "role_type": "jwt",
+            "bound_audiences": [
+              "https://github.com/acme"
+            ],
+            "bound_subject": "",
+            "bound_claims": null,
+            "bound_claims_type": "string",
+            "user_claim": "sub",
+            "groups_claim": "",
+            "allowed_redirect_uris": null,
+            "verbose_oidc_logging": false,
+            "token_policies": [
+              "deploy"
+            ],
+            "token_ttl": 0,
+            "token_max_ttl": 0,
+            "token_explicit_max_ttl": 0,
+            "token_period": 0,
+            "token_type": "default",
+            "token_bound_cidrs": [],
+            "token_num_uses": 0,
+            "token_no_default_policy": false
+          }
+        },
+        {
+          "namespace": "/",
+          "mount": "jwt/",
+          "type": "jwt",
+          "name": "ci-wildcard",
+          "config": {
+            "role_type": "jwt",
+            "bound_audiences": [
+              "https://github.com/acme"
+            ],
+            "bound_subject": "",
+            "bound_claims": {
+              "repository": "acme/*"
+            },
+            "bound_claims_type": "glob",
+            "user_claim": "sub",
+            "groups_claim": "",
+            "allowed_redirect_uris": null,
+            "verbose_oidc_logging": false,
+            "token_policies": [
+              "deploy"
+            ],
+            "token_ttl": 0,
+            "token_max_ttl": 0,
+            "token_explicit_max_ttl": 0,
+            "token_period": 0,
+            "token_type": "default",
+            "token_bound_cidrs": [],
+            "token_num_uses": 0,
+            "token_no_default_policy": false
+          }
+        },
+        {
+          "namespace": "/",
+          "mount": "jwt/",
+          "type": "jwt",
+          "name": "sso",
+          "config": {
+            "role_type": "oidc",
+            "bound_audiences": null,
+            "bound_subject": "",
+            "bound_claims": null,
+            "bound_claims_type": "string",
+            "user_claim": "sub",
+            "groups_claim": "",
+            "allowed_redirect_uris": [
+              "http://localhost:8250/oidc/callback"
+            ],
+            "verbose_oidc_logging": true,
+            "token_policies": [],
+            "token_ttl": 0,
+            "token_max_ttl": 0,
+            "token_explicit_max_ttl": 0,
+            "token_period": 0,
+            "token_type": "default",
+            "token_bound_cidrs": [],
+            "token_num_uses": 0,
+            "token_no_default_policy": false
+          }
+        },
+        {
+          "namespace": "/",
+          "mount": "kubernetes/",
+          "type": "kubernetes",
+          "name": "any-ns",
+          "config": {
+            "bound_service_account_names": [
+              "app"
+            ],
+            "bound_service_account_namespaces": [
+              "*"
+            ],
+            "bound_service_account_namespace_selector": "",
+            "alias_name_source": "serviceaccount_uid",
+            "token_policies": [
+              "app"
+            ],
+            "token_ttl": 0,
+            "token_max_ttl": 0,
+            "token_explicit_max_ttl": 0,
+            "token_period": 0,
+            "token_type": "default",
+            "token_bound_cidrs": [],
+            "token_num_uses": 0,
+            "token_no_default_policy": false
+          }
+        },
+        {
+          "namespace": "/",
+          "mount": "kubernetes/",
+          "type": "kubernetes",
+          "name": "any-pod",
+          "config": {
+            "bound_service_account_names": [
+              "*"
+            ],
+            "bound_service_account_namespaces": [
+              "*"
+            ],
+            "bound_service_account_namespace_selector": "",
+            "alias_name_source": "serviceaccount_uid",
+            "token_policies": [
+              "app"
+            ],
+            "token_ttl": 0,
+            "token_max_ttl": 0,
+            "token_explicit_max_ttl": 0,
+            "token_period": 0,
+            "token_type": "default",
+            "token_bound_cidrs": [],
+            "token_num_uses": 0,
+            "token_no_default_policy": false
+          }
+        },
+        {
+          "namespace": "/",
+          "mount": "kubernetes/",
+          "type": "kubernetes",
+          "name": "scoped",
+          "config": {
+            "bound_service_account_names": [
+              "app"
+            ],
+            "bound_service_account_namespaces": [
+              "prod"
+            ],
+            "bound_service_account_namespace_selector": "",
+            "alias_name_source": "serviceaccount_uid",
+            "token_policies": [
+              "app"
+            ],
+            "token_ttl": 0,
+            "token_max_ttl": 0,
+            "token_explicit_max_ttl": 0,
+            "token_period": 0,
+            "token_type": "default",
+            "token_bound_cidrs": [],
+            "token_num_uses": 0,
+            "token_no_default_policy": false
+          }
+        },
+        {
+          "namespace": "/",
+          "mount": "token/",
+          "type": "token",
+          "name": "ops-root",
+          "config": {
+            "allowed_policies": [
+              "root"
+            ],
+            "allowed_policies_glob": [],
+            "disallowed_policies": [],
+            "orphan": true,
+            "renewable": true,
+            "period": 0,
+            "explicit_max_ttl": 0,
+            "token_period": 0,
+            "token_explicit_max_ttl": 0,
+            "token_type": "default-service",
+            "path_suffix": ""
+          }
+        }
+      ]
+    },
+    "pki": {
+      "namespaces": [
+        "/"
+      ],
+      "mounts": [],
+      "issuers": []
+    }
+  }
+}

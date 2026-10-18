@@ -1,9 +1,10 @@
 [project]
 name = "vault-posture-skill"
-version = "0.1.0"
+version = "0.2.0"
 description = "Read-only HashiCorp Vault security posture Claude skill and its local dev environment"
 requires-python = ">=3.12"
 dependencies = [
+    "cryptography==50.0.2",
     "hvac==2.4.0",
     "requests>=2.32,<3",
 ]

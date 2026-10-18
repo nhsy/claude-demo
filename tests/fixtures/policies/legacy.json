@@ -1,0 +1,6 @@
+{
+  "path": {
+    "kv/legacy/*": {"policy": "write"},
+    "kv/+/locked": {"capabilities": ["deny"]}
+  }
+}

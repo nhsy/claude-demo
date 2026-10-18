@@ -27,11 +27,42 @@ Every finding carries a `rule_id` from this table. Remediation commands are **dr
 | VP-PLUG-001 | low | An external plugin (`evidence.plugin_type`/`evidence.plugin_name`) is registered without a version, so which binary runs can't be tracked or pinned across upgrades. | `vault plugin register -sha256=<sha> -version=<semver> <type> <name>`, then `vault plugin reload -plugin=<name>` | Registering a versioned entry doesn't switch mounts to it: each mount pins its plugin version (`vault secrets tune -plugin-version=…`). |
 | VP-PLUG-002 | info | External (non-builtin) plugins are registered (`evidence.plugins`). Each one runs third-party code inside Vault's trust boundary. | No catalogue command: review each plugin's source, owner and update cadence; deregister unused ones with `vault plugin deregister -version=<v> <type> <name>` after confirming no mount uses them. | Inventory for supply-chain review, not a defect. |
 
+## Auth roles
+
+Role findings carry `namespace`, `evidence.mount` and `evidence.role`; `object.path` is the role's API path. Add `-namespace=<namespace>` to every command for a role outside the root namespace. On these auth methods a `vault write` to an existing role updates only the fields given; the operator should `vault read` the role before and after.
+
+| Rule | Severity | Meaning | Remediation (for an operator to run) | Caveats |
+| --- | --- | --- | --- | --- |
+| VP-ROLE-001 | high | Logging in through this role yields a root token (`evidence.token_policies`), or this token role can mint root tokens (`evidence.allowed_policies` / `allowed_policies_glob`). Whoever satisfies the role's bindings owns the cluster. | Auth role: `vault write <object.path> token_policies=<least-privilege policies>`. Token role: `vault write <object.path> allowed_policies=<policies>` (and drop any glob that matches `root`). | Root tokens should only come from `vault operator generate-root` during a break-glass event, then be revoked. Confirm who relies on the role before changing it. |
+| VP-ROLE-002 | medium | A JWT role (`role_type=jwt`) checks only `bound_audiences`. Any token the issuer mints for that audience logs in: for GitHub Actions, any workflow in any repository that requests that audience. | `vault write <object.path> bound_subject=<exact sub>` or `bound_claims=<json>` with `bound_claims_type=string`, e.g. `{"repository":"org/repo","ref":"refs/heads/main"}` | OIDC (browser) roles are not flagged: redirect URIs and the user's login constrain them. |
+| VP-ROLE-003 | medium | `bound_claims_type=glob` and a bound claim contains `*` (`evidence.wildcard_claims`), e.g. `repository: org/*` accepts every repository in the org, forks and new repos included. | Replace the wildcard with explicit values (a list is allowed): `vault write <object.path> bound_claims=<json without wildcards>` | A glob is sometimes intended (environments, branches). Pair it with a second exact claim such as `repository_owner_id`. |
+| VP-ROLE-004 | low | `verbose_oidc_logging=true`: ID tokens and claims are written to the Vault server log. | `vault write <object.path> verbose_oidc_logging=false` | Meant for short debugging sessions only; Vault warns when it is enabled. |
+| VP-ROLE-005 | high | A Kubernetes role binds `bound_service_account_names=*` and `bound_service_account_namespaces=*` with no namespace selector: every pod in the cluster can log in. | `vault write <object.path> bound_service_account_names=<sa> bound_service_account_namespaces=<ns>` | Check which workloads use the role first (audit log `auth/<mount>login` with this role). |
+| VP-ROLE-006 | medium | A Kubernetes role accepts any service account name (`evidence.any_service_account`) or any namespace (`evidence.any_namespace`). | Narrow the wildcard side: `vault write <object.path> bound_service_account_names=<sa>` or `bound_service_account_namespaces=<ns>` (or `bound_service_account_namespace_selector=<label selector>`) | A namespace selector is not flagged: it is how `*` is meant to be narrowed. |
+| VP-ROLE-007 | medium | An AppRole has `bind_secret_id=false`: the role ID alone authenticates, so it is a long-lived static password bounded only by CIDR (`evidence.secret_id_bound_cidrs`, `evidence.token_bound_cidrs`). | `vault write <object.path> bind_secret_id=true`, then deliver secret IDs to the workload (response wrapping recommended) | Breaks the current login flow until the client sends a secret ID: coordinate with the app owner. |
+| VP-ROLE-008 | low | AppRole secret IDs never expire (`secret_id_ttl=0`); a leaked secret ID stays valid until someone revokes it. | `vault write <object.path> secret_id_ttl=<e.g. 720h>` | Existing secret IDs keep the TTL they were issued with; rotate them after the change. |
+| VP-ROLE-009 | low | The role issues periodic tokens (`evidence.period_seconds`) with no explicit max TTL: renewed on time they never expire. On token roles `evidence.orphan` shows whether they also escape parent revocation. | `vault write <object.path> token_explicit_max_ttl=<e.g. 720h>` (token roles: `token_explicit_max_ttl=…`) | Periodic tokens suit long-running services; the explicit max TTL just bounds them. |
+
+## PKI
+
+PKI findings need the `vault-posture-pki-reader` add-on policy; without it the `mounts` scope is `denied` and no VP-PKI rule is judged. `object.path` is `<mount>issuer/<issuer_id>` for issuer rules and `<mount>` for mount rules; `evidence.issuer_name` / `evidence.common_name` identify the issuer. Add `-namespace=<namespace>` outside the root namespace.
+
+| Rule | Severity | Meaning | Remediation (for an operator to run) | Caveats |
+| --- | --- | --- | --- | --- |
+| VP-PKI-001 | high | The issuer certificate has expired (`evidence.not_after`). Nothing it signs validates, and anything still chaining to it is failing now. | Issue a replacement CA: for a root, `vault write <mount>root/rotate/internal common_name=<cn> issuer_name=<new>`; for an intermediate, generate a CSR with `vault write <mount>intermediate/generate/internal …`, have the parent sign it, then `vault write <mount>intermediate/set-signed certificate=@<file>`. Then `vault write <mount>config/issuers default=<new>`. | Revoked issuers are not judged. Clients must trust the new CA before leaves move to it. |
+| VP-PKI-002 | medium | The issuer expires within `evidence.threshold_days` (default 30) days (`evidence.days_left`). | As VP-PKI-001, now, before it expires. | Leaf TTLs are capped by the issuer unless leaf_not_after_behavior=permit (VP-PKI-008), so new leaves are already getting shorter. |
+| VP-PKI-003 | low | The issuer expires within `evidence.threshold_days` (default 90) days. | Plan the rotation in VP-PKI-001; root rotation needs client trust-store updates, which take time. | |
+| VP-PKI-004 | low | Automatic tidy is disabled on the mount: expired certificates and revocation entries accumulate, growing storage and slowing CRL builds. | `vault write <mount>config/auto-tidy enabled=true tidy_cert_store=true tidy_revoked_certs=true interval_duration=12h` | The first tidy of a large store is heavy; run a manual `vault write <mount>tidy …` off-peak first. |
+| VP-PKI-005 | low | Neither the issuer nor the mount (`config/urls`) publishes an AIA issuing-certificates URL, so clients can't fetch missing chain certificates. | `vault write <mount>config/urls issuing_certificates=<https://vault/v1/<mount>ca> crl_distribution_points=<…/crl>` | Only affects certificates issued after the change. |
+| VP-PKI-006 | medium | The mount has both the CRL (`disable=true`) and OCSP (`ocsp_disable=true`) disabled: a revoked certificate can't be detected by anyone. | `vault write <mount>config/crl disable=false` (and/or `ocsp_disable=false`) | Disabling both is defensible only for very short-lived leaves (minutes); confirm that is the design. |
+| VP-PKI-007 | medium | The issuer uses a weak key or signature (`evidence.weaknesses`: RSA/DSA below 2048 bits, EC below 256, SHA-1/MD5). | Rotate to a new issuer with a strong key (as VP-PKI-001, e.g. `key_type=ec key_bits=256` or `key_type=rsa key_bits=3072`). | Current Vault refuses to create such keys, so these issuers were imported. |
+| VP-PKI-008 | low | `leaf_not_after_behavior=permit`: the issuer signs leaves that outlive it, which fail validation once the issuer expires. | `vault patch <object.path> leaf_not_after_behavior=err` (or `truncate`) | Use `patch`: a `write` to an issuer resets fields not given, including its name. |
+
 ## Ranking
 
 When reporting, group in this order:
 
-1. VP-SEC-001 (possible unauthorised root), VP-SEC-002.
-2. VP-QUOTA-001/002 (no protection from noisy clients or lease explosions).
-3. VP-QUOTA-003, VP-SEC-003, VP-PLUG-001.
+1. VP-SEC-001 (possible unauthorised root), VP-ROLE-001 (root via login), VP-ROLE-005 (any pod logs in), VP-PKI-001 (expired CA), VP-SEC-002.
+2. VP-ROLE-002/003/006/007 (loose login bindings), VP-PKI-002/006/007, VP-QUOTA-001/002 (no protection from noisy clients or lease explosions).
+3. VP-QUOTA-003, VP-SEC-003, VP-PLUG-001, VP-ROLE-004/008/009, VP-PKI-003/004/005/008.
 4. Info: VP-QUOTA-004, VP-SEC-004, VP-PLUG-002.

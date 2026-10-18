@@ -1,7 +1,7 @@
 {
   "name": "vault-posture",
-  "version": "0.1.0",
-  "description": "Read-only HashiCorp Vault security posture review: quotas, root-token generation and rekey in progress, barrier key age and rotation, external plugins. Never changes Vault.",
+  "version": "0.2.0",
+  "description": "Read-only HashiCorp Vault security posture review: auth role bindings, PKI issuer expiry and hygiene, quotas, root generation and rekey in progress, barrier key rotation, external plugins, and offline ACL policy evaluation. Never changes Vault.",
   "author": {
     "name": "nhsy"
   },
