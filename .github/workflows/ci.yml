@@ -2,7 +2,8 @@ name: ci
 
 # Every step after tool setup is a Task target, so CI runs exactly what developers run:
 # lint, plugin:validate and test (`task test:ci`), then test:e2e against a local
-# `vault server -dev`. No licence, token or secrets needed.
+# `vault server -dev` and test:e2e:compose against the Community container in
+# compose.yaml. No licence, token or secrets needed.
 
 on:
   push:
@@ -104,3 +105,33 @@ jobs:
 
       - name: task test:e2e
         run: task test:e2e
+
+  # Community container from compose.yaml: up with --wait, seed (including the
+  # compose/plugins dummy plugin), mint the token, run unit + integration tests,
+  # remove the container on exit. Runs alongside `integration`.
+  compose:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          version: "0.12.23"
+          enable-cache: true
+
+      - uses: arduino/setup-task@v3.0.0
+        with:
+          version: "3.54.0"
+
+      - name: Install Vault CLI
+        run: |
+          curl -fsSL -o vault.zip https://releases.hashicorp.com/vault/2.1.1/vault_2.1.1_linux_amd64.zip
+          unzip -q vault.zip vault && sudo mv vault /usr/local/bin/ && vault version
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: task test:e2e:compose
+        run: task test:e2e:compose
