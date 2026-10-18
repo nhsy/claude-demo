@@ -96,15 +96,32 @@ For issue stages, claim the issue before any other work:
 
 ### Plan (agent-ready)
 1. Read the issue and its comments: `gh issue view N --comments`.
-2. Check it against the definition of ready in CLAUDE.md. If anything
-   is missing, comment numbered questions, move the label from
-   agent-working to agent-blocked, and stop.
-3. Explore the code without changing it. Post ONE comment headed
-   "## Implementation plan": files to change, approach, test plan
-   (which `task` targets, and any new unit or integration tests), risks,
-   and the commits you expect to make. End it with: "To approve, reply
-   with a comment starting Approved, then set agent-build."
-4. Move the label from agent-working to agent-plan-review.
+2. Check it against the definition of ready in CLAUDE.md. Also treat it
+   as not ready when it contradicts itself (the proposal against the
+   scope limits), depends on another open issue that doesn't provide
+   what it needs, needs something you can't get (an Enterprise licence,
+   a cloud account), or asks for what main already has (search the
+   tests). If anything is missing, comment numbered questions, move the
+   label from agent-working to agent-blocked, and stop. Never settle a
+   contradiction yourself.
+3. Explore the code without changing it, and verify before you plan.
+   For each new endpoint, field or rule, check the Vault references in
+   CLAUDE.md and try it on the dev server (`task dev:up`, then
+   `task dev:down`). Copy grant shapes from `scripts/gen_policies.py`
+   (`{m}` mount paths, MOUNT_DEPTH) rather than writing your own.
+4. Post ONE comment headed "## Implementation plan" with:
+   - the approach, and what you verified and how;
+   - every file you will touch, tests included;
+   - the test plan: each acceptance criterion with the test that proves
+     it, and which `task` targets run;
+   - risks, and the commits you expect to make;
+   - "Questions" (Build waits for a person's answer) kept apart from
+     "Defaults" (choices Build makes unless told otherwise);
+   - only the CLAUDE.md checklist items this change triggers, no pasted
+     boilerplate.
+   End it with: "To approve, reply with a comment starting Approved,
+   then set agent-build."
+5. Move the label from agent-working to agent-plan-review.
 
 ### Build (agent-build)
 1. Read the issue, the latest "## Implementation plan" comment and every
