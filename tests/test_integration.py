@@ -88,6 +88,10 @@ def test_seeded_role_and_pki_details(posture):
     assert ("VP-AWS-003", "auth/aws/role/scoped") in by_path
     assert ("VP-AWS-004", "auth/aws/role/ec2-migrating") in by_path
     assert ("VP-PKI-006", "pki_off/") in by_path
+    # Two-segment mounts are read with the read-only token too.
+    assert ("VP-ROLE-005", "auth/k8s/prod/role/any-pod") in by_path
+    nested = [f for f in posture["findings"] if f["rule_id"] == "VP-PKI-003" and f["object"]["path"].startswith("ca/int/issuer/")]
+    assert [f["evidence"]["issuer_name"] for f in nested] == ["nested"]
     expiring = next(f for f in posture["findings"] if f["rule_id"] == "VP-PKI-002")
     assert expiring["evidence"]["issuer_name"] == "critical"
     assert "BEGIN CERTIFICATE" not in json.dumps(posture)

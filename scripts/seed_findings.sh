@@ -8,6 +8,7 @@
 #   VP-ROLE-001..009  JWT, Kubernetes, AppRole and token roles with loose bindings
 #   VP-AWS-001..004   AWS IAM and EC2 roles (written without AWS credentials: no unique-ID lookups)
 #   VP-PKI-002..006/008  short-lived issuers, no AIA URLs, auto-tidy off, CRL+OCSP off, leaf_not_after=permit
+# auth/k8s/prod/ and ca/int/ (two-segment mounts) show the policies reach deeper mount paths.
 # Unit tests cover what a dev server can't show: VP-QUOTA-001 (conflicts with 003), VP-SEC-003
 # (year-old key), VP-PKI-001 (expired issuer) and VP-PKI-007 (Vault refuses weak keys). Idempotent.
 set -euo pipefail
@@ -41,11 +42,13 @@ if [[ "$(vault read -field=started sys/rekey/init)" != "true" ]]; then
   vault operator rekey -init -key-shares=1 -key-threshold=1 -format=json >/dev/null
 fi
 # ---- auth roles
-enable_auth() { vault auth list -format=json | jq -e --arg p "$1/" '.[$p]' >/dev/null || vault auth enable "$1" >/dev/null; }
+# enable_auth <type> [path]
+enable_auth() { vault auth list -format=json | jq -e --arg p "${2:-$1}/" '.[$p]' >/dev/null || vault auth enable -path="${2:-$1}" "$1" >/dev/null; }
 enable_auth jwt
 enable_auth kubernetes
 enable_auth approle
 enable_auth aws
+enable_auth kubernetes k8s/prod
 # A throwaway validation key: the JWT roles are never logged into.
 pubkey="$(openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 2>/dev/null | openssl pkey -pubout)"
 write auth/jwt/config jwt_validation_pubkeys="$pubkey" bound_issuer=https://token.actions.githubusercontent.com
@@ -58,6 +61,7 @@ write auth/jwt/role/break-glass role_type=jwt user_claim=sub bound_subject=repo:
 write auth/jwt/role/sso role_type=oidc user_claim=sub allowed_redirect_uris=http://localhost:8250/oidc/callback verbose_oidc_logging=true
 write auth/kubernetes/role/any-pod bound_service_account_names='*' bound_service_account_namespaces='*' token_policies=app
 write auth/kubernetes/role/any-ns bound_service_account_names=app bound_service_account_namespaces='*' token_policies=app
+write auth/k8s/prod/role/any-pod bound_service_account_names='*' bound_service_account_namespaces='*' token_policies=app
 write auth/kubernetes/role/scoped bound_service_account_names=app bound_service_account_namespaces=prod token_policies=app
 write auth/approle/role/role-id-only bind_secret_id=false secret_id_bound_cidrs=10.0.0.0/8 token_policies=app
 write auth/approle/role/forever-secret secret_id_ttl=0 token_policies=app token_period=24h
@@ -71,11 +75,15 @@ write auth/aws/role/ec2-migrating auth_type=ec2 bound_account_id=123456789012 al
 enable_pki() { vault secrets list -format=json | jq -e --arg p "$1/" '.[$p]' >/dev/null || vault secrets enable -path="$1" pki >/dev/null; }
 enable_pki pki
 enable_pki pki_off
+enable_pki ca/int  # pki/int/ would clash with the pki/ mount
 if ! vault list pki/issuers >/dev/null 2>&1; then  # exit 2 when there are none
   write pki/root/generate/internal common_name="posture critical CA" issuer_name=critical ttl=240h
   write pki/root/generate/internal common_name="posture warning CA" issuer_name=warning ttl=1440h
 fi
+if ! vault list ca/int/issuers >/dev/null 2>&1; then
+  write ca/int/root/generate/internal common_name="posture nested CA" issuer_name=nested ttl=1440h
+fi
 vault patch pki/issuer/critical leaf_not_after_behavior=permit >/dev/null  # patch: a write would reset issuer_name
 write pki_off/config/crl disable=true ocsp_disable=true
 
-echo "Seeded ${VAULT_ADDR}: rate-limit quota on auth/userpass/, external plugin posture-dummy, generate-root and rekey in progress, auth roles, PKI issuers"
+echo "Seeded ${VAULT_ADDR}: rate-limit quota on auth/userpass/, external plugin posture-dummy, generate-root and rekey in progress, auth roles (also under auth/k8s/prod/), PKI issuers (also under ca/int/)"
