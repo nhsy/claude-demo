@@ -137,7 +137,7 @@ tasks:
       - task: test
 
   github:setup:
-    desc: "One-time repo setup for the /issue-sdlc pipeline: agent-* labels, rebase-only merging, branch auto-delete (needs gh with admin rights)"
+    desc: "One-time repo setup for the /issue-sdlc pipeline: create the agent-* labels, check merge settings (needs gh with write access)"
     # REST only (gh api), so it also works where GitHub GraphQL is blocked, as in Claude Code
     # cloud sessions. gh api fills {owner}/{repo} in from the git remote.
     preconditions:
@@ -159,14 +159,21 @@ tasks:
         label agent-build 5319E7 "Plan approved; /issue-sdlc will build it (set by a person)"
         label agent-pr-review 006B75 "Draft PR open; waiting for a person to review it"
         label agent-blocked B60205 "Claude asked a question or a run stopped; needs a person"
-      # Read first and write only when something differs, so a rerun needs no settings-write access.
+      # Merge settings are only checked, never written: changing them is the repo admin's call.
+      # Any drift is listed with where to fix it; the task still succeeds.
       - |
-        current="$(gh api repos/{owner}/{repo} --jq '[.allow_rebase_merge, .allow_squash_merge, .allow_merge_commit, .delete_branch_on_merge] | map(tostring) | join(" ")')"
-        if [ "$current" = "true false false true" ]; then
-          echo "repo already rebase-merge only with branch auto-delete"
+        drift="$(gh api repos/{owner}/{repo} --jq '
+          [ (if .allow_rebase_merge != true then "  - Allow rebase merging: turn ON" else empty end),
+            (if .allow_squash_merge != false then "  - Allow squash merging: turn OFF" else empty end),
+            (if .allow_merge_commit != false then "  - Allow merge commits: turn OFF" else empty end),
+            (if .delete_branch_on_merge != true then "  - Automatically delete head branches: turn ON" else empty end)
+          ] | join("\n")')"
+        if [ -z "$drift" ]; then
+          echo "repo settings OK: rebase merging only, branch auto-delete on"
         else
-          gh api -X PATCH repos/{owner}/{repo} -F allow_rebase_merge=true -F allow_squash_merge=false -F allow_merge_commit=false -F delete_branch_on_merge=true --silent
-          echo "repo set to rebase merging only, branch auto-delete on"
+          echo "WARNING: repo merge settings differ from what the /issue-sdlc pipeline expects."
+          echo "Change them in GitHub: Settings > General > Pull Requests"
+          echo "$drift"
         fi
 
   plugin:validate:
