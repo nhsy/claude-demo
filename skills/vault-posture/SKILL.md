@@ -1,6 +1,6 @@
 ---
 name: vault-posture
-description: READ-ONLY, observe-only HashiCorp Vault security posture review. ALWAYS load this skill before answering any question about a vault-posture review or its results ("my last posture review", "the last review", files in .tmp/vault-posture/ or named *-posture-*, *-roles-*, *-pki-*, *-quotas-*, *-security-*, access-*.json), even when the file could be read directly. Use when the user asks whether Vault is configured safely; about auth role bindings (JWT/OIDC or GitHub Actions roles, Kubernetes service-account roles, AppRole, token roles, roles that yield root); PKI CA or issuer expiry, weak CA keys, CRL/OCSP/AIA or tidy settings; rate-limit or lease-count quotas; whether a root token generation or rekey is in progress; barrier key age or rotation; external plugins; or which ACL policies grant a capability on a path ("who can write secret/x", "why am I denied"). Also use when given vault-posture JSON files to interpret. For cluster health, inventory, entities or client counts use the vault-ops skill instead. Observes and reports only; NEVER makes changes to Vault.
+description: READ-ONLY, observe-only HashiCorp Vault security posture review. ALWAYS load this skill before answering any question about a vault-posture review or its results ("my last posture review", "the last review", files in .tmp/vault-posture/ or named *-posture-*, *-roles-*, *-pki-*, *-quotas-*, *-security-*, access-*.json), even when the file could be read directly. Use when the user asks whether Vault is configured safely; about auth role bindings (JWT/OIDC or GitHub Actions roles, Kubernetes service-account roles, AWS IAM or EC2 roles, AppRole, token roles, roles that yield root); PKI CA or issuer expiry, weak CA keys, CRL/OCSP/AIA or tidy settings; rate-limit or lease-count quotas; whether a root token generation or rekey is in progress; barrier key age or rotation; external plugins; or which ACL policies grant a capability on a path ("who can write secret/x", "why am I denied"). Also use when given vault-posture JSON files to interpret. For cluster health, inventory, entities or client counts use the vault-ops skill instead. Observes and reports only; NEVER makes changes to Vault.
 allowed-tools: Bash(uv run --script *vault_posture.py *), Read, Glob
 ---
 
@@ -42,7 +42,7 @@ Whether you just ran the script or are reading an existing file, each answer tha
 | Ask | Command | Output (path printed on stdout) |
 | --- | --- | --- |
 | Posture review / "is Vault configured safely" | `audit [--namespace ns]` | `*-posture-*.json` |
-| Auth role bindings (JWT/OIDC, Kubernetes, AppRole, token roles) | `roles [--namespace ns]` | `*-roles-*.json` |
+| Auth role bindings (JWT/OIDC, Kubernetes, AWS, AppRole, token roles) | `roles [--namespace ns]` | `*-roles-*.json` |
 | CA / issuer expiry, PKI hygiene | `pki [--namespace ns] [--pki-critical-days 30] [--pki-warning-days 90]` | `*-pki-*.json` |
 | Quotas / noisy clients / lease explosions | `quotas` | `*-quotas-*.json` |
 | Root generation or rekey in progress / barrier key / plugins | `security [--key-age-days 365]` | `*-security-*.json` |
@@ -94,4 +94,4 @@ claude
 
 ## Scope
 
-Not covered (say so if asked): auth methods other than JWT/OIDC, Kubernetes, AppRole and token roles; quotas created inside child namespaces; ACL policies stored only in Vault (use the vault-ops `policies` subcommand); Sentinel. For cluster health, inventory, ACL/Sentinel policy hygiene, entities and client counts, use the **vault-ops** skill.
+Not covered (say so if asked): auth methods other than JWT/OIDC, Kubernetes, AWS, AppRole and token roles; the AWS secrets engine; quotas created inside child namespaces; ACL policies stored only in Vault (use the vault-ops `policies` subcommand); Sentinel. For cluster health, inventory, ACL/Sentinel policy hygiene, entities and client counts, use the **vault-ops** skill.
