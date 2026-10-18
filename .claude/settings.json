@@ -31,6 +31,17 @@
       "Bash(task token:*)"
     ],
     "deny": [
+      "Bash(git add .)",
+      "Bash(git add ./)",
+      "Bash(git add -- .)",
+      "Bash(git add :/)",
+      "Bash(git add -A:*)",
+      "Bash(git add --all:*)",
+      "Bash(git add -u:*)",
+      "Bash(git add --update:*)",
+      "Bash(git commit -a:*)",
+      "Bash(git commit -am:*)",
+      "Bash(git commit --all:*)",
       "Bash(gh pr merge:*)",
       "Bash(git merge:*)",
       "Bash(git pull --no-rebase:*)",
