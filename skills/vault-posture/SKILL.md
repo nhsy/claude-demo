@@ -1,6 +1,6 @@
 ---
 name: vault-posture
-description: READ-ONLY, observe-only HashiCorp Vault security posture review. Use when the user asks whether Vault is configured safely; about auth role bindings (JWT/OIDC or GitHub Actions roles, Kubernetes service-account roles, AppRole, token roles, roles that yield root); PKI CA or issuer expiry, weak CA keys, CRL/OCSP/AIA or tidy settings; rate-limit or lease-count quotas; whether a root token generation or rekey is in progress; barrier key age or rotation; external plugins; or which ACL policies grant a capability on a path ("who can write secret/x", "why am I denied"). Also use when given vault-posture JSON files to interpret. For cluster health, inventory, entities or client counts use the vault-ops skill instead. Observes and reports only; NEVER makes changes to Vault.
+description: READ-ONLY, observe-only HashiCorp Vault security posture review. ALWAYS load this skill before answering any question about a vault-posture review or its results ("my last posture review", "the last review", files in .tmp/vault-posture/ or named *-posture-*, *-roles-*, *-pki-*, *-quotas-*, *-security-*, access-*.json), even when the file could be read directly. Use when the user asks whether Vault is configured safely; about auth role bindings (JWT/OIDC or GitHub Actions roles, Kubernetes service-account roles, AppRole, token roles, roles that yield root); PKI CA or issuer expiry, weak CA keys, CRL/OCSP/AIA or tidy settings; rate-limit or lease-count quotas; whether a root token generation or rekey is in progress; barrier key age or rotation; external plugins; or which ACL policies grant a capability on a path ("who can write secret/x", "why am I denied"). Also use when given vault-posture JSON files to interpret. For cluster health, inventory, entities or client counts use the vault-ops skill instead. Observes and reports only; NEVER makes changes to Vault.
 allowed-tools: Bash(uv run --script *vault_posture.py *), Read, Glob
 ---
 
@@ -17,12 +17,24 @@ Code collects and checks; you interpret. All Vault access goes through the bundl
 | Explain findings and their impact | Execute a remediation command, even when asked |
 | Draft remediation as text for an operator | Mint, renew, revoke or look up tokens |
 
+## Every answer about findings
+
+Whether you just ran the script or are reading an existing file, each answer that reports findings must:
+
+1. **Read `references/rules.md` first** (with the Read tool, from this skill's directory). It holds each rule's meaning, its ranking and the remediation command; don't answer from the JSON alone.
+2. **Rank** by the Ranking section of `references/rules.md`, high severity first.
+3. **Draft a fix for every finding you raise**: the command from `references/rules.md` with its placeholders filled from the finding, in a code block headed **"For an operator to run"**. The catalogue's commands are the checked ones: use them as given, without hedging about whether a flag exists. Where the catalogue has no command, describe the change in words.
+4. **Say what was not covered**: `unsupported` and `not_applicable` scopes (for example Enterprise-only lease-count quotas on Community, recovery keys on a Shamir seal) go under "Not covered", never as problems. `denied` or `error` scopes mean the results are partial: open with them.
+5. **End** with one line saying the review was read-only and nothing in Vault was changed.
+
 ## Hard rules
 
 - Only run `uv run --script ${CLAUDE_SKILL_DIR}/scripts/vault_posture.py <subcommand> ...`. Never run any other command against Vault.
 - Never read, print or echo `.env`, token files, `VAULT_TOKEN` or any environment variable value. The user provides credentials via the environment before the session.
+- **Never reveal or help retrieve credentials**: no tokens, role IDs, secret IDs, secret ID accessors, unseal or recovery keys, OTPs or private keys, and no commands that would fetch or mint them (for example `vault read …/role-id`, `vault write …/secret-id`, `vault token create`, `vault token lookup`, `vault unwrap`, `cat .env`), not even "to run in your own shell". The review never collects role IDs or secret IDs, so they are not in its files: say so, decline, and carry on with the findings by role name.
+- When you decline a change or a credential request, the reason is that this skill is **observe-only by design**, not that a tool is unavailable in this session.
 - Remediation is **drafted as text** and labelled "for an operator to run". Take commands from `references/rules.md`, filling placeholders from the finding (add `-namespace=<ns>` outside the root namespace). Never invent endpoints or flags; if the catalogue has none, describe the change in words.
-- VP-SEC-001 (root token generation in progress) is urgent but may be a planned break-glass ceremony: tell the user to confirm with the key holders before anyone cancels it.
+- VP-SEC-001 (root token generation in progress) is urgent but may be a planned break-glass ceremony: tell the user to confirm with the key holders, and check the audit log for who started it, before anyone cancels it.
 - Output files hold role names, mount paths and CA names. Never copy them elsewhere in the project.
 
 ## Subcommands
@@ -67,10 +79,10 @@ claude
 
 1. **Files first.** If the user points at existing vault-posture JSON files, use them and skip to step 3. For "the last review", look for the newest `*-posture-*.json` (or the subcommand's file) in the output directory.
 2. **Run** the matching subcommand. On exit 1, report the stderr message (see Setup problems) and stop.
-3. **Read** the JSON file with the Read tool. For a large estate, read `summary` and `findings` first; `data` holds the raw (allowlisted) inventory.
+3. **Read** the JSON file and `references/rules.md` with the Read tool. For a large estate, read `summary` and `findings` first; `data` holds the raw (allowlisted) inventory.
 4. **Coverage first.** If `coverage.complete` is false, open with the `denied` or `error` scopes (and their namespaces) and say the results are partial. `unsupported` (Enterprise-only on Community) and `not_applicable` (e.g. recovery keys on a Shamir seal) are complete answers: list them under "Not covered", not as gaps.
-5. **Explain.** Rank findings using the Ranking section of `references/rules.md`. For each: what it is, why it matters here, the namespace and object, the evidence, and a drafted remediation command for an operator to run. Group repeated rules (e.g. ten audience-only JWT roles) with a count and up to three examples.
-6. **Finish** with a summary table (rule, severity, count), the path of the file written, and one line saying the review was read-only and nothing in Vault was changed.
+5. **Explain**, following "Every answer about findings" above. For each finding: what it is, why it matters here, the namespace and object, the evidence, and its "For an operator to run" command. Group repeated rules (e.g. ten audience-only JWT roles) with a count and up to three examples.
+6. **Finish** with a summary table (rule, severity, count), the path of the file read or written, "Not covered", and the read-only closing line.
 
 ## Reading the files
 
