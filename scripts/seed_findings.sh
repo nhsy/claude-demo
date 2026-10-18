@@ -6,6 +6,7 @@
 #   VP-SEC-004        dev servers have no rotation interval
 #   VP-PLUG-001/002   an external plugin registered without a version
 #   VP-ROLE-001..009  JWT, Kubernetes, AppRole and token roles with loose bindings
+#   VP-AWS-001..004   AWS IAM and EC2 roles (written without AWS credentials: no unique-ID lookups)
 #   VP-PKI-002..006/008  short-lived issuers, no AIA URLs, auto-tidy off, CRL+OCSP off, leaf_not_after=permit
 # Unit tests cover what a dev server can't show: VP-QUOTA-001 (conflicts with 003), VP-SEC-003
 # (year-old key), VP-PKI-001 (expired issuer) and VP-PKI-007 (Vault refuses weak keys). Idempotent.
@@ -44,6 +45,7 @@ enable_auth() { vault auth list -format=json | jq -e --arg p "$1/" '.[$p]' >/dev
 enable_auth jwt
 enable_auth kubernetes
 enable_auth approle
+enable_auth aws
 # A throwaway validation key: the JWT roles are never logged into.
 pubkey="$(openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 2>/dev/null | openssl pkey -pubout)"
 write auth/jwt/config jwt_validation_pubkeys="$pubkey" bound_issuer=https://token.actions.githubusercontent.com
@@ -60,6 +62,10 @@ write auth/kubernetes/role/scoped bound_service_account_names=app bound_service_
 write auth/approle/role/role-id-only bind_secret_id=false secret_id_bound_cidrs=10.0.0.0/8 token_policies=app
 write auth/approle/role/forever-secret secret_id_ttl=0 token_policies=app token_period=24h
 write auth/token/roles/ops-root allowed_policies=root orphan=true
+write auth/aws/role/any-principal auth_type=iam bound_iam_principal_arn='arn:aws:iam::*:role/*' resolve_aws_unique_ids=false token_policies=app
+write auth/aws/role/scoped auth_type=iam bound_iam_principal_arn=arn:aws:iam::123456789012:role/app resolve_aws_unique_ids=false token_policies=app
+write auth/aws/role/ec2-region-only auth_type=ec2 bound_region=us-east-1 token_policies=app
+write auth/aws/role/ec2-migrating auth_type=ec2 bound_account_id=123456789012 allow_instance_migration=true token_policies=app
 
 # ---- PKI
 enable_pki() { vault secrets list -format=json | jq -e --arg p "$1/" '.[$p]' >/dev/null || vault secrets enable -path="$1" pki >/dev/null; }
