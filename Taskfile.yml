@@ -138,14 +138,18 @@ tasks:
 
   github:setup:
     desc: "One-time repo setup for the /issue-sdlc pipeline: agent-* labels, rebase-only merging (needs gh with admin rights)"
-    vars:
-      LABELS: agent-ready agent-working agent-plan-review agent-build agent-review agent-blocked
     preconditions:
       - sh: gh auth status
         msg: "gh is not signed in; run: gh auth login"
     cmds:
-      - for: { var: LABELS }
-        cmd: gh label create {{.ITEM}} --force
+      # --force updates an existing label in place, so reruns reset colour and description.
+      # Colours run from go (green) through the stages to stopped (red); people set the green and purple ones.
+      - gh label create agent-ready --force --color 0E8A16 --description "Meets the definition of ready; /issue-sdlc will plan it (set by a person)"
+      - gh label create agent-working --force --color FBCA04 --description "A Claude Code session holds this issue; other runs skip it"
+      - gh label create agent-plan-review --force --color 1D76DB --description "Implementation plan posted; waiting for a person to approve"
+      - gh label create agent-build --force --color 5319E7 --description "Plan approved; /issue-sdlc will build it (set by a person)"
+      - gh label create agent-review --force --color 006B75 --description "Draft PR open; waiting for review"
+      - gh label create agent-blocked --force --color B60205 --description "Claude asked a question or a run stopped; needs a person"
       - gh repo edit --enable-rebase-merge --enable-squash-merge=false --enable-merge-commit=false
 
   plugin:validate:
