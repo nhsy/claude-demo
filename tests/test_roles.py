@@ -145,3 +145,42 @@ def test_aws_ec2_roles(config, expected):
 def test_aws_roles_still_get_token_param_rules():
     config = {"auth_type": "ec2", "bound_account_id": ["123456789012"], "token_policies": ["root"], "token_period": 3600}
     assert ids([role("aws", config)]) == ["VP-ROLE-001", "VP-ROLE-009"]
+
+
+@pytest.mark.parametrize(
+    ("config", "expected"),
+    [
+        ({}, ["VP-CERT-001"]),
+        ({"allowed_common_names": None, "allowed_dns_sans": [], "required_extensions": [], "ocsp_enabled": True}, ["VP-CERT-001"]),
+        ({"allowed_common_names": ["svc.example.com"]}, []),
+        ({"allowed_names": ["*.example.com"]}, []),
+        ({"allowed_organizational_units": ["payments"]}, []),
+        ({"allowed_organizations": ["Acme"]}, []),
+        ({"allowed_email_sans": ["ops@example.com"]}, []),
+        ({"allowed_uri_sans": ["spiffe://example.org/web"]}, []),
+        ({"required_extensions": ["1.2.3.4:*"]}, []),
+        ({"allowed_common_names": ["*"]}, ["VP-CERT-002"]),
+        ({"allowed_dns_sans": ["*.*"]}, ["VP-CERT-002"]),
+        ({"allowed_names": ["*.com"]}, ["VP-CERT-002"]),
+        ({"allowed_common_names": ["web.example.com", "*"]}, ["VP-CERT-002"]),  # values are ORed
+        ({"allowed_common_names": ["*"], "allowed_dns_sans": ["*.io"]}, ["VP-CERT-002"]),
+        ({"allowed_common_names": ["*"], "allowed_organizational_units": ["payments"]}, []),  # fields are ANDed
+        ({"allowed_common_names": ["*"], "allowed_dns_sans": ["web.example.com"]}, []),
+        ({"allowed_common_names": ["*.example.com", "web-*"]}, []),
+    ],
+)
+def test_cert_roles(config, expected):
+    assert ids([role("cert", config)]) == expected
+
+
+def test_cert_catch_all_evidence_and_path():
+    (f,) = vp.check_roles(vp.RoleData(roles=[role("cert", {"allowed_common_names": ["*", "web"], "allowed_dns_sans": ["*.com"]}, name="web")]))
+    assert f.rule_id == "VP-CERT-002"
+    assert f.evidence["broad_patterns"] == {"allowed_common_names": ["*"], "allowed_dns_sans": ["*.com"]}
+    assert f.object_path == "auth/cert/certs/web"
+    assert f.object_kind == "cert_role"
+
+
+def test_cert_roles_still_get_token_param_rules():
+    config = {"allowed_common_names": ["svc.example.com"], "token_policies": ["root"], "token_period": 3600}
+    assert ids([role("cert", config)]) == ["VP-ROLE-001", "VP-ROLE-009"]
