@@ -59,4 +59,5 @@ evals/                          claude plugin eval cases and fixtures
 - Empty Vault lists answer 404; Enterprise-only paths answer 404 `enterprise-only feature`; recovery-key endpoints answer 404/400 on Shamir seals. `classify()` maps these to `absent`, `unsupported` and `not_applicable`, none of which make coverage incomplete.
 - `-dev-plugin-dir` tries to mount every plugin it finds, so the dummy plugin would crash the server; the dev servers use `plugin_directory` in config instead.
 - Results and tokens live under `.tmp/` (gitignored). Never commit anything from it; eval fixtures must be generated with `--redact-addr`.
+- `claude plugin eval` aborts every run ("a file in the plugin has more than one name (a hard link)") when uv hard-linked `.venv/` from its cache: rebuild it with `UV_LINK_MODE=copy uv sync --reinstall`.
 - `task plugin:validate` runs without `--strict` because this CLAUDE.md sits at the plugin root (a warning: it's repo guidance, not plugin context).
