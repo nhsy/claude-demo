@@ -20,6 +20,7 @@ Every workflow is a Task target; run `task` to list them. Don't call the scripts
 | Regenerate the token policies | `task policies` |
 | Plugin manifest check | `task plugin:validate` |
 | Skill evals (spend API credits: ask first) | `task eval` |
+| Compare opus/sonnet/haiku on the evals (judge mode; spends API credits: ask first) | `task eval:judge` |
 
 Before pushing: `task lint` and `task test`, and `task test:e2e` when you touched collection, policies or seeding.
 
