@@ -96,3 +96,52 @@ def test_role_finding_carries_namespace_and_path():
     assert found[0].namespace == "team-a"
     assert found[0].object_path == "auth/approle/role/svc"
     assert found[0].to_dict()["namespace"] == "team-a/"
+
+
+@pytest.mark.parametrize(
+    ("config", "expected"),
+    [
+        ({"auth_type": "iam", "bound_iam_principal_arn": ["*"]}, ["VP-AWS-001"]),
+        ({"auth_type": "iam", "bound_iam_principal_arn": ["arn:aws:iam::*:role/*"]}, ["VP-AWS-001"]),
+        ({"auth_type": "iam", "bound_iam_principal_arn": ["arn:aws-us-gov:iam::12*:role/app"]}, ["VP-AWS-001"]),
+        ({"auth_type": "iam", "bound_iam_principal_arn": ["arn:aws:iam::123456789012:role/app-*"]}, []),  # one account, any role name
+        ({"auth_type": "iam", "bound_iam_principal_arn": ["arn:aws:iam::123456789012:role/app"], "resolve_aws_unique_ids": True}, []),
+        ({"auth_type": "iam", "bound_iam_principal_arn": ["arn:aws:iam::123456789012:role/app"], "resolve_aws_unique_ids": False}, ["VP-AWS-003"]),
+        ({"auth_type": "iam", "bound_iam_principal_arn": ["arn:aws:iam::*:role/*"], "resolve_aws_unique_ids": False}, ["VP-AWS-001"]),  # wildcards never resolve
+        ({"bound_iam_principal_arn": ["*"]}, ["VP-AWS-001"]),  # auth_type defaults to iam
+    ],
+)
+def test_aws_iam_roles(config, expected):
+    assert ids([role("aws", config)]) == expected
+
+
+def test_aws_wildcard_principal_evidence_shows_account_narrowing():
+    plain = {"auth_type": "iam", "bound_iam_principal_arn": ["arn:aws:iam::*:role/*"], "bound_account_id": ["123456789012"]}
+    inferred = {**plain, "inferred_entity_type": "ec2_instance"}
+    (a,) = vp.check_roles(vp.RoleData(roles=[role("aws", plain)]))
+    (b,) = vp.check_roles(vp.RoleData(roles=[role("aws", inferred)]))
+    assert a.evidence["wildcard_arns"] == ["arn:aws:iam::*:role/*"]
+    assert (a.evidence["account_narrowed"], b.evidence["account_narrowed"]) == (False, True)
+    assert a.object_path == "auth/aws/role/r"
+
+
+@pytest.mark.parametrize(
+    ("config", "expected"),
+    [
+        ({"auth_type": "ec2"}, ["VP-AWS-002"]),
+        ({"auth_type": "ec2", "bound_region": ["us-east-1"], "bound_ami_id": ["ami-1"], "bound_vpc_id": []}, ["VP-AWS-002"]),
+        ({"auth_type": "ec2", "bound_account_id": ["123456789012"]}, []),
+        ({"auth_type": "ec2", "bound_vpc_id": ["vpc-1"], "bound_region": ["us-east-1"]}, []),
+        ({"auth_type": "ec2", "bound_iam_role_arn": ["arn:aws:iam::123456789012:role/web"]}, []),
+        ({"auth_type": "ec2", "bound_ec2_instance_id": ["i-0abc"]}, []),
+        ({"auth_type": "ec2", "bound_account_id": ["123456789012"], "allow_instance_migration": True}, ["VP-AWS-004"]),
+        ({"auth_type": "ec2", "bound_account_id": ["123456789012"], "allow_instance_migration": False}, []),
+    ],
+)
+def test_aws_ec2_roles(config, expected):
+    assert ids([role("aws", config)]) == expected
+
+
+def test_aws_roles_still_get_token_param_rules():
+    config = {"auth_type": "ec2", "bound_account_id": ["123456789012"], "token_policies": ["root"], "token_period": 3600}
+    assert ids([role("aws", config)]) == ["VP-ROLE-001", "VP-ROLE-009"]

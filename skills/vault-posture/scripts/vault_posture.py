@@ -202,6 +202,10 @@ RULES: dict[str, Rule] = {
     "VP-ROLE-007": Rule("medium", "roles", "AppRole role does not require a secret ID"),
     "VP-ROLE-008": Rule("low", "roles", "AppRole secret IDs never expire"),
     "VP-ROLE-009": Rule("low", "roles", "Role issues periodic tokens with no explicit max TTL"),
+    "VP-AWS-001": Rule("high", "roles", "AWS IAM role accepts a principal in any AWS account"),
+    "VP-AWS-002": Rule("high", "roles", "AWS EC2 role is not bound to an account or instance"),
+    "VP-AWS-003": Rule("low", "roles", "AWS IAM role matches principals by name, not unique ID"),
+    "VP-AWS-004": Rule("low", "roles", "AWS EC2 role allows instance migration"),
     "VP-PKI-001": Rule("high", "pki", "PKI issuer certificate has expired"),
     "VP-PKI-002": Rule("medium", "pki", "PKI issuer certificate expires within the critical window"),
     "VP-PKI-003": Rule("low", "pki", "PKI issuer certificate expires within the warning window"),
@@ -729,6 +733,24 @@ def _wildcard_claims(bound_claims: Any) -> dict[str, list[str]]:
     return {k: [str(v) for v in as_list(vals) if "*" in str(v)] for k, vals in claims.items() if any("*" in str(v) for v in as_list(vals))}
 
 
+# EC2 bounds that tie a login to one account or instance; bound_region and bound_ami_id don't
+# (any account can run an instance in a region, or launch a public AMI).
+AWS_EC2_PINNING_BOUNDS = (
+    "bound_account_id",
+    "bound_iam_role_arn",
+    "bound_iam_instance_profile_arn",
+    "bound_ec2_instance_id",
+    "bound_vpc_id",
+    "bound_subnet_id",
+)
+
+
+def _any_account_arn(arn: str) -> bool:
+    # arn:<partition>:iam::<account>:<resource>; "*" alone matches every principal.
+    parts = arn.split(":")
+    return arn == "*" or (len(parts) >= 6 and "*" in parts[4])
+
+
 def check_roles(data: RoleData) -> list[Finding]:
     found: list[Finding] = []
     for role in data.roles:
@@ -803,6 +825,64 @@ def check_roles(data: RoleData) -> list[Finding]:
                         secret_id_num_uses=c.get("secret_id_num_uses"),
                     )
                 )
+
+        if role.source == "aws":
+            found.extend(_check_aws_role(role))
+    return found
+
+
+def _check_aws_role(role: AuthRole) -> list[Finding]:
+    found: list[Finding] = []
+    c = role.config
+    auth_type = c.get("auth_type", "iam")
+    if auth_type == "iam":
+        arns = [str(a) for a in as_list(c.get("bound_iam_principal_arn"))]
+        wildcard = [a for a in arns if _any_account_arn(a)]
+        if wildcard:
+            accounts = [str(a) for a in as_list(c.get("bound_account_id"))]
+            # bound_account_id is only checked on IAM logins that infer an EC2 instance.
+            narrowed = bool(accounts) and c.get("inferred_entity_type") == "ec2_instance"
+            found.append(
+                _role_finding(
+                    "VP-AWS-001",
+                    role,
+                    f"AWS role '{role.name}' accepts IAM principals from any AWS account: {', '.join(wildcard)}"
+                    + (f" (narrowed to account {', '.join(accounts)} through the inferred EC2 instance)." if narrowed else "."),
+                    wildcard_arns=wildcard,
+                    bound_account_id=accounts,
+                    account_narrowed=narrowed,
+                )
+            )
+        exact = [a for a in arns if "*" not in a]
+        if exact and c.get("resolve_aws_unique_ids") is False:
+            found.append(
+                _role_finding(
+                    "VP-AWS-003",
+                    role,
+                    f"AWS role '{role.name}' matches IAM principals by ARN only: a principal deleted and recreated with the same name still logs in.",
+                    bound_iam_principal_arn=exact,
+                )
+            )
+    elif auth_type == "ec2":
+        if not any(as_list(c.get(b)) for b in AWS_EC2_PINNING_BOUNDS):
+            found.append(
+                _role_finding(
+                    "VP-AWS-002",
+                    role,
+                    f"AWS EC2 role '{role.name}' is not bound to an account, VPC, subnet, IAM role or instance: an instance in any AWS account that matches the remaining bounds can log in.",
+                    bound_region=as_list(c.get("bound_region")),
+                    bound_ami_id=as_list(c.get("bound_ami_id")),
+                )
+            )
+        if c.get("allow_instance_migration"):
+            found.append(
+                _role_finding(
+                    "VP-AWS-004",
+                    role,
+                    f"AWS EC2 role '{role.name}' allows instance migration, which weakens the protection against a reused identity document.",
+                    disallow_reauthentication=c.get("disallow_reauthentication"),
+                )
+            )
     return found
 
 
