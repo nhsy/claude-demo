@@ -194,6 +194,18 @@ def test_collect_roles_reads_gcp_roles():
     assert data.roles[0].config == {"type": "iam", "bound_service_accounts": ["*"], "max_jwt_exp": 900, "allow_gce_inference": True, "add_group_aliases": False}
 
 
+def test_collect_roles_reads_azure_roles():
+    body = {"bound_service_principal_ids": ["*"], "bound_group_ids": None, "bound_locations": ["eastus"], "token_policies": ["app"], "alias_metadata": {"team": "web"}, "client_secret": "s"}
+    routes = {
+        ("sys/auth", False): mounts(azure="azure"),
+        ("auth/azure/role", True): ok({"keys": ["vm"]}),
+        ("auth/azure/role/vm", False): ok(body),
+    }
+    data = vp.collect_roles(FakeReader(routes), vp.Coverage(), [""])
+    assert [(r.source, r.path) for r in data.roles] == [("azure", "auth/azure/role/vm")]
+    assert data.roles[0].config == {"bound_service_principal_ids": ["*"], "bound_group_ids": None, "bound_locations": ["eastus"], "token_policies": ["app"]}
+
+
 def test_collect_roles_reads_cert_roles_without_the_ca():
     body = {"certificate": "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n", "allowed_common_names": ["*"], "display_name": "web", "ocsp_enabled": False}
     routes = {

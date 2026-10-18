@@ -163,6 +163,18 @@ ROLE_SOURCES: dict[str, tuple[str, tuple[str, ...]]] = {
             *TOKEN_PARAM_FIELDS,
         ),
     ),
+    "azure": (
+        "role",
+        (
+            "bound_service_principal_ids",
+            "bound_group_ids",
+            "bound_subscription_ids",
+            "bound_resource_groups",
+            "bound_locations",
+            "bound_scale_sets",
+            *TOKEN_PARAM_FIELDS,
+        ),
+    ),
     # The role's trusted CA (`certificate`) is never kept.
     "cert": (
         "certs",
