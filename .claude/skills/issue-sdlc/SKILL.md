@@ -38,8 +38,9 @@ Before finding work, relabel finished issues (bookkeeping, not a stage).
 REST only, so it also works where GitHub GraphQL is blocked:
 
 - `gh api "repos/{owner}/{repo}/issues?state=closed&labels=agent-pr-review" --jq '.[].number'`
-- for each N, the merged PR:
-  `gh api "repos/{owner}/{repo}/pulls?state=closed&head={owner}:agent/issue-N" --jq '.[] | select(.merged_at) | .number'`
+- for each N, the merged PR that closes it, whatever its branch (a merged PR
+  cross-referencing #N whose body says "Closes #N", "Fixes #N" or "Resolves #N"):
+  `gh api --paginate "repos/{owner}/{repo}/issues/N/timeline" --jq '.[] | select(.event == "cross-referenced") | .source.issue | select(.pull_request.merged_at) | select((.body // "") | test("(?i)\\b(close[sd]?|fix(e[sd])?|resolve[sd]?) #N\\b")) | .number'`
 - if there is one: `gh api -X DELETE "repos/{owner}/{repo}/issues/N/labels/agent-pr-review"`
   and `gh api -X POST "repos/{owner}/{repo}/issues/N/labels" -f "labels[]=agent-done"`
 
@@ -79,7 +80,8 @@ For issue stages, claim the issue before any other work:
 ### Build (agent-build)
 1. Read the issue, the latest "## Implementation plan" comment and any
    later maintainer comments.
-2. `git switch main && git pull --rebase`, then `git switch -c agent/issue-N`.
+2. `git switch main && git pull --rebase`, then `git switch -c agent/issue-N`,
+   even when the session suggests another branch (CLAUDE.md "Git workflow").
 3. Implement the plan one commit at a time. Write or update tests and
    run `task lint && task test` until they pass at every commit; run
    `task test:e2e` too when the change touches collection, policies or seeding.
