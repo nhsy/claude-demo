@@ -14,18 +14,18 @@ spec.loader.exec_module(report)
 def run(*graders, error=None):
     return {
         "passed": all(ok for _, ok in graders) and error is None,
-        "cost_usd": 0.1,
+        "costUsd": 0.1,
         "error": error,
         "graders": [{"name": n, "passed": ok, "explanation": ""} for n, ok in graders],
     }
 
 
 def result(cost, *cases):
-    return {"schema_version": "1.0", "cost_usd": cost, "cases": list(cases)}
+    return {"schemaVersion": 1, "costUsd": cost, "cases": list(cases)}
 
 
 def case(name, score, *runs):
-    return {"name": name, "score": score, "pass_rate": score, "runs": list(runs)}
+    return {"name": name, "arms": {"with": list(runs)}, "aggregates": {"score": score, "passRate": score}}
 
 
 def write(tmp_path, model, data):

@@ -22,16 +22,27 @@ def load(results_dir: Path) -> dict[str, dict]:
     return out
 
 
+def runs(case: dict) -> list[dict]:
+    return case.get("arms", {}).get("with", [])
+
+
+def score(case: dict) -> float:
+    return case.get("aggregates", {}).get("score", 0.0)
+
+
+def passed(case: dict) -> bool:
+    return bool(runs(case)) and all(r.get("passed") for r in runs(case))
+
+
 def case_cell(case: dict) -> str:
     """'✓ 1.00' when every run passed, else '✗ <score>' and the failing grader names."""
-    runs = case.get("runs", [])
-    score = case.get("score", 0.0)
-    if runs and all(r.get("passed") for r in runs):
-        return f"✓ {score:.2f}"
-    failed = sorted({g["name"] for r in runs for g in r.get("graders", []) if not g.get("passed")})
-    errors = [r["error"] for r in runs if r.get("error")]
+    score_ = score(case)
+    if passed(case):
+        return f"✓ {score_:.2f}"
+    failed = sorted({g["name"] for r in runs(case) for g in r.get("graders", []) if not g.get("passed")})
+    errors = [r["error"] for r in runs(case) if r.get("error")]
     why = ", ".join(failed) or ("error" if errors else "")
-    return f"✗ {score:.2f}" + (f" ({why})" if why else "")
+    return f"✗ {score_:.2f}" + (f" ({why})" if why else "")
 
 
 def render(results: dict[str, dict]) -> str:
@@ -49,15 +60,15 @@ def render(results: dict[str, dict]) -> str:
         cells = [case_cell(by_model[m][name]) if name in by_model[m] else "-" for m in models]
         lines.append(f"| {name} | " + " | ".join(cells) + " |")
 
-    passed, mean, cost = [], [], []
+    n_passed, mean, cost = [], [], []
     for m in models:
         cases = list(by_model[m].values())
-        ok = sum(1 for c in cases if c.get("runs") and all(r.get("passed") for r in c["runs"]))
-        passed.append(f"**{ok}/{len(cases)}**")
-        mean.append(f"{sum(c.get('score', 0.0) for c in cases) / len(cases):.2f}" if cases else "-")
-        cost.append(f"${results[m].get('cost_usd', 0.0):.2f}")
+        ok = sum(1 for c in cases if passed(c))
+        n_passed.append(f"**{ok}/{len(cases)}**")
+        mean.append(f"{sum(score(c) for c in cases) / len(cases):.2f}" if cases else "-")
+        cost.append(f"${results[m].get('costUsd', 0.0):.2f}")
     lines += [
-        "| Cases passed | " + " | ".join(passed) + " |",
+        "| Cases passed | " + " | ".join(n_passed) + " |",
         "| Mean score | " + " | ".join(mean) + " |",
         "| Cost | " + " | ".join(cost) + " |",
     ]
