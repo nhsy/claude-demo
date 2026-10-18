@@ -92,7 +92,7 @@ All are in-memory dev servers with root token `root`. `task seed` (`scripts/seed
 Claude Code works labelled GitHub issues through the SDLC from your terminal: refine and plan, build, test, self-review, open a draft PR, and fix review feedback. People keep two gates: approving the plan and merging the PR. The project skill [`.claude/skills/issue-sdlc`](.claude/skills/issue-sdlc/SKILL.md) finds the next item in GitHub, runs one stage and stops. Nothing runs on its own: you start every run by typing `/issue-sdlc` (or `/issue-sdlc 42` for one item). There are no GitHub Actions and no CI-hosted agent.
 
 ```
-agent-ready ─▶ /issue-sdlc plans ─▶ agent-plan-review ─▶ (you approve) agent-build
+agent-ready ─▶ /issue-sdlc plans ─▶ agent-plan-review ─▶ (you comment "Approved") agent-build
             ─▶ /issue-sdlc builds ─▶ draft PR, agent-pr-review ─▶ (you review: request changes ⟲ /issue-sdlc fixes)
             ─▶ (you) Rebase and merge, which closes the issue ─▶ next /issue-sdlc run: agent-done
 any stage ─▶ agent-blocked (question or failed run) ─▶ answer, then re-add agent-ready
