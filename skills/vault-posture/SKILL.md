@@ -94,4 +94,6 @@ claude
 
 ## Scope
 
+Mount paths are covered up to three segments deep (`auth/k8s/prod/eu/`, `ca/int/`). The policies don't reach roles or issuers on deeper mounts, so those reads show up as `denied` scopes (`roles.<mount>`, `pki.<mount>issuers`); report them as not judged and don't suggest widening the token.
+
 Not covered (say so if asked): auth methods other than JWT/OIDC, Kubernetes, AWS, AppRole and token roles; the AWS secrets engine; quotas created inside child namespaces; ACL policies stored only in Vault (use the vault-ops `policies` subcommand); Sentinel. For cluster health, inventory, ACL/Sentinel policy hygiene, entities and client counts, use the **vault-ops** skill.
