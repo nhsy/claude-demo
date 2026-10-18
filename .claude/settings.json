@@ -28,6 +28,8 @@
       "Bash(task dev:up:*)",
       "Bash(task dev:down:*)",
       "Bash(task seed:*)",
+      "WebFetch(domain:developer.hashicorp.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(task token:*)"
     ],
     "deny": [

@@ -89,6 +89,16 @@ evals/                          claude plugin eval cases and fixtures
 - The script stays one self-contained file: no imports from the rest of the repo. Keep its PEP 723 dependency pins in step with `pyproject.toml`.
 - The `access` evaluator must match Vault. If you change `effective_capabilities` or `parse_policy`, extend `tests/fixtures/policies/` and `EXPECTED` in `tests/test_access.py`; the integration test re-checks every case against `sys/capabilities` on the dev server.
 
+## Vault references
+
+Check these before adding an endpoint, a field or a rule; don't rely on memory.
+
+- API paths, parameters, response fields: https://developer.hashicorp.com/vault/api-docs
+- Concepts and operator commands (for `references/rules.md` remediation): https://developer.hashicorp.com/vault/docs
+- When something was added, changed or moved to Enterprise: grep https://raw.githubusercontent.com/hashicorp/vault/main/CHANGELOG.md (it's large; search it, don't read it whole).
+
+The dev server (`compose.yaml` pins the version) is the final word. If it disagrees with the docs, trust the server, cover the case in `task test:integration`, and add a line to Gotchas.
+
 ## Gotchas
 
 - `vault write` to a PKI issuer replaces its whole config (it clears `issuer_name`): use `vault patch`. The seed script does.
