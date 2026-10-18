@@ -45,7 +45,7 @@ these queues in order and take the first (oldest) match:
 
 Skip anything labeled agent-working, agent-plan-review or agent-blocked.
 If nothing matches, say the queue is empty and list how many issues
-wait on a person in agent-plan-review, agent-review and agent-blocked.
+wait on a person in agent-plan-review, agent-pr-review and agent-blocked.
 
 For issue stages, claim the issue before any other work:
 `gh issue edit N --remove-label <its label> --add-label agent-working`
@@ -77,7 +77,7 @@ For issue stages, claim the issue before any other work:
    a body that fills in .github/pull_request_template.md, starting with
    "Closes #N".
 7. Comment the PR link on the issue. Move the label from agent-working
-   to agent-review.
+   to agent-pr-review.
 If tests can't pass or the plan doesn't fit the code, comment why,
 move the label to agent-blocked, and stop.
 
@@ -90,7 +90,7 @@ move the label to agent-blocked, and stop.
 4. `git fetch origin && git rebase origin/main`, run the tests again, then
    `git push --force-with-lease origin agent/<branch>`.
 5. `gh pr comment P` listing what you changed.
-The issue stays agent-review.
+The issue stays agent-pr-review.
 
 ## 3. Report
 
