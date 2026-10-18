@@ -44,7 +44,9 @@ def all_reads():
     for ns, child in (("a", "b/"), ("a/b", "c/")):
         routes[(ns, "sys/namespaces", True)] = ok({"keys": [child]})
     for ns in ("a", "a/b", "a/b/c"):
-        routes[(ns, "sys/auth", False)] = mounts(approle="approle", token="ns_token")
+        routes[(ns, "sys/auth", False)] = mounts(approle="approle", aws="aws", token="ns_token")
+        routes[(ns, "auth/aws/role", True)] = ok({"keys": ["ec2"]})
+        routes[(ns, "auth/aws/role/ec2", False)] = ok({"auth_type": "ec2", "bound_account_id": ["123456789012"]})
         routes[(ns, "auth/approle/role", True)] = ok({"keys": ["svc"]})
         routes[(ns, "auth/approle/role/svc", False)] = ok({"bind_secret_id": True})
         routes[(ns, "auth/token/roles", True)] = ok({"keys": ["t"]})
@@ -97,6 +99,7 @@ def test_pki_reads_need_the_addon():
         "auth/approle/role/svc/secret-id",
         "auth/approle/role/svc/secret-id/",
         "team-a/auth/approle/role/svc/role-id",
+        "auth/aws/config/client",
         "secret/data/app",
         "sys/policies/acl/admin",
         "auth/token/create",
