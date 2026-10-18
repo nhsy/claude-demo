@@ -238,6 +238,10 @@ RULES: dict[str, Rule] = {
     "VP-AWS-002": Rule("high", "roles", "AWS EC2 role is not bound to an account or instance"),
     "VP-AWS-003": Rule("low", "roles", "AWS IAM role matches principals by name, not unique ID"),
     "VP-AWS-004": Rule("low", "roles", "AWS EC2 role allows instance migration"),
+    "VP-GCP-001": Rule("high", "roles", "GCP IAM role accepts any service account in any project"),
+    "VP-GCP-002": Rule("high", "roles", "GCP GCE role is not bound to a project or service account"),
+    "VP-GCP-003": Rule("medium", "roles", "GCP IAM role accepts every service account in its projects"),
+    "VP-GCP-004": Rule("low", "roles", "GCP IAM role accepts signed JWTs valid longer than 15 minutes"),
     "VP-CERT-001": Rule("medium", "roles", "Cert auth role accepts any certificate its CA signed"),
     "VP-CERT-002": Rule("medium", "roles", "Cert auth role matches names with a catch-all wildcard"),
     "VP-PKI-001": Rule("high", "pki", "PKI issuer certificate has expired"),
@@ -883,6 +887,8 @@ def check_roles(data: RoleData) -> list[Finding]:
 
         if role.source == "aws":
             found.extend(_check_aws_role(role))
+        if role.source == "gcp":
+            found.extend(_check_gcp_role(role))
         if role.source == "cert":
             found.extend(_check_cert_role(role))
     return found
@@ -967,6 +973,61 @@ def _check_aws_role(role: AuthRole) -> list[Finding]:
                     role,
                     f"AWS EC2 role '{role.name}' allows instance migration, which weakens the protection against a reused identity document.",
                     disallow_reauthentication=c.get("disallow_reauthentication"),
+                )
+            )
+    return found
+
+
+# Vault's default (and recommended) max_jwt_exp for GCP IAM logins.
+GCP_DEFAULT_JWT_EXP = 900
+
+
+def _check_gcp_role(role: AuthRole) -> list[Finding]:
+    found: list[Finding] = []
+    c = role.config
+    accounts = [str(a) for a in as_list(c.get("bound_service_accounts"))]
+    projects = [str(p) for p in as_list(c.get("bound_projects"))]
+    if c.get("type", "iam") == "iam":
+        if "*" in accounts and not projects:
+            found.append(
+                _role_finding(
+                    "VP-GCP-001",
+                    role,
+                    f"GCP IAM role '{role.name}' accepts every service account (bound_service_accounts=*) with no bound_projects: a service account in any GCP project can log in.",
+                    allow_gce_inference=c.get("allow_gce_inference"),
+                )
+            )
+        elif "*" in accounts:
+            found.append(
+                _role_finding(
+                    "VP-GCP-003",
+                    role,
+                    f"GCP IAM role '{role.name}' accepts every service account in {'projects' if len(projects) > 1 else 'project'} {', '.join(projects)}.",
+                    bound_projects=projects,
+                )
+            )
+        max_exp = _seconds(c.get("max_jwt_exp"))
+        if max_exp > GCP_DEFAULT_JWT_EXP:
+            found.append(
+                _role_finding(
+                    "VP-GCP-004",
+                    role,
+                    f"GCP IAM role '{role.name}' accepts signed JWTs valid for up to {max_exp}s (default {GCP_DEFAULT_JWT_EXP}s), so a stolen JWT stays replayable longer.",
+                    max_jwt_exp_seconds=max_exp,
+                )
+            )
+    elif c.get("type") == "gce":
+        # A service account email belongs to one project, so an exact one pins the project too.
+        if not projects and not [a for a in accounts if a != "*"]:
+            found.append(
+                _role_finding(
+                    "VP-GCP-002",
+                    role,
+                    f"GCP GCE role '{role.name}' is not bound to a project or service account: an instance in any GCP project that matches the remaining bounds can log in.",
+                    bound_zones=as_list(c.get("bound_zones")),
+                    bound_regions=as_list(c.get("bound_regions")),
+                    bound_instance_groups=as_list(c.get("bound_instance_groups")),
+                    bound_labels=c.get("bound_labels") or {},
                 )
             )
     return found

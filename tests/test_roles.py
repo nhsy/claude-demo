@@ -147,6 +147,56 @@ def test_aws_roles_still_get_token_param_rules():
     assert ids([role("aws", config)]) == ["VP-ROLE-001", "VP-ROLE-009"]
 
 
+SA = "app@my-proj.iam.gserviceaccount.com"
+
+
+@pytest.mark.parametrize(
+    ("config", "expected"),
+    [
+        ({"type": "iam", "bound_service_accounts": ["*"], "max_jwt_exp": 900}, ["VP-GCP-001"]),
+        ({"bound_service_accounts": ["*"]}, ["VP-GCP-001"]),  # type defaults to iam
+        ({"type": "iam", "bound_service_accounts": ["*"], "bound_projects": ["my-proj"]}, ["VP-GCP-003"]),
+        ({"type": "iam", "bound_service_accounts": [SA]}, []),  # the email pins the project
+        ({"type": "iam", "bound_service_accounts": [SA], "bound_projects": ["my-proj"], "max_jwt_exp": 900}, []),
+        ({"type": "iam", "bound_service_accounts": [SA], "max_jwt_exp": 901}, ["VP-GCP-004"]),
+        ({"type": "iam", "bound_service_accounts": ["*"], "max_jwt_exp": 3600}, ["VP-GCP-001", "VP-GCP-004"]),
+        ({"type": "iam", "bound_service_accounts": [SA], "max_jwt_exp": "bogus"}, []),
+    ],
+)
+def test_gcp_iam_roles(config, expected):
+    assert ids([role("gcp", config)]) == expected
+
+
+@pytest.mark.parametrize(
+    ("config", "expected"),
+    [
+        ({"type": "gce"}, ["VP-GCP-002"]),
+        ({"type": "gce", "bound_zones": ["us-central1-a"], "bound_regions": ["us-central1"], "bound_labels": {"env": "prod"}, "bound_instance_groups": ["web"]}, ["VP-GCP-002"]),
+        ({"type": "gce", "bound_service_accounts": ["*"], "bound_zones": ["us-central1-a"]}, ["VP-GCP-002"]),
+        ({"type": "gce", "bound_projects": ["my-proj"]}, []),
+        ({"type": "gce", "bound_service_accounts": [SA]}, []),
+        ({"type": "gce", "bound_projects": ["my-proj"], "max_jwt_exp": 3600}, []),  # max_jwt_exp is iam only
+    ],
+)
+def test_gcp_gce_roles(config, expected):
+    assert ids([role("gcp", config)]) == expected
+
+
+def test_gcp_evidence_and_path():
+    iam = role("gcp", {"type": "iam", "bound_service_accounts": [SA], "max_jwt_exp": 3600}, name="ci")
+    gce = role("gcp", {"type": "gce", "bound_zones": ["us-central1-a"], "bound_labels": {"env": "prod"}}, name="vm")
+    project = role("gcp", {"type": "iam", "bound_service_accounts": ["*"], "bound_projects": ["my-proj"]}, name="p")
+    a, b, c = (vp.check_roles(vp.RoleData(roles=[r]))[0] for r in (iam, gce, project))
+    assert (a.rule_id, a.evidence["max_jwt_exp_seconds"], a.object_path, a.object_kind) == ("VP-GCP-004", 3600, "auth/gcp/role/ci", "gcp_role")
+    assert (b.rule_id, b.evidence["bound_zones"], b.evidence["bound_labels"]) == ("VP-GCP-002", ["us-central1-a"], {"env": "prod"})
+    assert (c.rule_id, c.evidence["bound_projects"]) == ("VP-GCP-003", ["my-proj"])
+
+
+def test_gcp_roles_still_get_token_param_rules():
+    config = {"type": "gce", "bound_projects": ["my-proj"], "token_policies": ["root"], "token_period": 3600}
+    assert ids([role("gcp", config)]) == ["VP-ROLE-001", "VP-ROLE-009"]
+
+
 @pytest.mark.parametrize(
     ("config", "expected"),
     [

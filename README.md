@@ -10,7 +10,7 @@ A single-file `uv run --script` Python program (`hvac`, `requests`, `cryptograph
 
 | Subcommand | Rules | Looks at |
 | --- | --- | --- |
-| `roles` | VP-ROLE-001..009, VP-AWS-001..004, VP-CERT-001..002 | JWT/OIDC, Kubernetes, AWS, GCP, cert, AppRole and token roles in every namespace: root via login, audience-only or wildcard JWT bindings, any-pod Kubernetes roles, any-account AWS IAM and EC2 roles, unconstrained or catch-all cert roles, role-ID-only AppRoles, never-expiring secret IDs, unbounded periodic tokens |
+| `roles` | VP-ROLE-001..009, VP-AWS-001..004, VP-GCP-001..004, VP-CERT-001..002 | JWT/OIDC, Kubernetes, AWS, GCP, cert, AppRole and token roles in every namespace: root via login, audience-only or wildcard JWT bindings, any-pod Kubernetes roles, any-account AWS IAM and EC2 roles, any-project GCP IAM and GCE roles, long-lived GCP signed JWTs, unconstrained or catch-all cert roles, role-ID-only AppRoles, never-expiring secret IDs, unbounded periodic tokens |
 | `pki` | VP-PKI-001..008 | Issuer expiry, weak CA keys, AIA/CRL/OCSP, auto-tidy, leaves outliving the CA (needs the PKI add-on policy) |
 | `quotas` | VP-QUOTA-001..004 | Missing or path-only rate-limit and lease-count quotas, unaudited throttling |
 | `security` | VP-SEC-001..004, VP-PLUG-001..002 | Root/recovery token generation or rekey in progress, barrier key age and rotation, external plugins |
@@ -64,7 +64,7 @@ task lint                    # ruff, shellcheck, gitleaks, yaml/json
 | Community container | `task up` | `http://127.0.0.1:8250` |
 | Enterprise container (`VAULT_LICENSE` in `.env`) | `task up:ent` | `http://127.0.0.1:8260` |
 
-All are in-memory dev servers with root token `root`. `task seed` (`scripts/seed_findings.sh`) configures one to trip every rule a dev server can show (quotas, a root generation and a rekey in progress, an unversioned external plugin, loose JWT/Kubernetes/AWS/cert/AppRole/token roles, short-lived CAs), plus quiet controls. `task token` writes both policies and mints a 1h token into `.tmp/posture-token`.
+All are in-memory dev servers with root token `root`. `task seed` (`scripts/seed_findings.sh`) configures one to trip every rule a dev server can show (quotas, a root generation and a rekey in progress, an unversioned external plugin, loose JWT/Kubernetes/AWS/GCP/cert/AppRole/token roles, short-lived CAs), plus quiet controls. `task token` writes both policies and mints a 1h token into `.tmp/posture-token`.
 
 ### Tests
 
