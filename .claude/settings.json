@@ -1,0 +1,45 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh issue list:*)",
+      "Bash(gh issue view:*)",
+      "Bash(gh issue edit:*)",
+      "Bash(gh issue comment:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr diff:*)",
+      "Bash(gh pr create:*)",
+      "Bash(gh pr comment:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git switch:*)",
+      "Bash(git fetch:*)",
+      "Bash(git pull --rebase:*)",
+      "Bash(git rebase origin/main:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push -u origin agent/:*)",
+      "Bash(git push --force-with-lease origin agent/:*)",
+      "Bash(task lint:*)",
+      "Bash(task test:*)",
+      "Bash(task policies:*)",
+      "Bash(task plugin:validate:*)",
+      "Bash(task dev:up:*)",
+      "Bash(task dev:down:*)",
+      "Bash(task seed:*)",
+      "Bash(task token:*)"
+    ],
+    "deny": [
+      "Bash(gh pr merge:*)",
+      "Bash(git merge:*)",
+      "Bash(git pull --no-rebase:*)",
+      "Bash(gh issue close:*)",
+      "Bash(gh label delete:*)",
+      "Bash(git push --force origin:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push origin main:*)",
+      "Bash(git push --force-with-lease origin main:*)"
+    ]
+  }
+}

@@ -1,0 +1,41 @@
+name: Agent task
+description: Work for the Claude Code issue pipeline
+title: "[Agent] "
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What should change, and why?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Testable statements, one per line.
+      value: |
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+      description: Files, modules or behaviour that must not change.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Links and context
+      description: Related issues, designs, logs or error output.
+  - type: checkboxes
+    id: ready
+    attributes:
+      label: Ready check
+      options:
+        - label: The change fits in one PR
+          required: true
+        - label: Every acceptance criterion can be tested
+          required: true
