@@ -146,7 +146,7 @@ tasks:
     cmds:
       # Each label is created, or updated in place when it already exists, so reruns reset
       # colour and description. Colours run from go (green) through the stages to stopped
-      # (red); people set the green and purple ones.
+      # (red), then grey once done; people set the green and purple ones.
       - |
         label() {
           gh api -X POST repos/{owner}/{repo}/labels -f name="$1" -f color="$2" -f description="$3" --silent 2>/dev/null \
@@ -159,6 +159,7 @@ tasks:
         label agent-build 5319E7 "Plan approved; /issue-sdlc will build it (set by a person)"
         label agent-pr-review 006B75 "Draft PR open; waiting for a person to review it"
         label agent-blocked B60205 "Claude asked a question or a run stopped; needs a person"
+        label agent-done 6E7781 "PR merged and issue closed; delivered through the agent pipeline"
       # Merge settings are only checked, never written: changing them is the repo admin's call.
       # Any drift is listed with where to fix it; the task still succeeds.
       - |

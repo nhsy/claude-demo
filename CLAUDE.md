@@ -45,6 +45,7 @@ GitHub issues move through `agent-*` labels; the project skill `.claude/skills/i
 | `agent-build` | Plan approved; `/issue-sdlc` will build it | a person |
 | `agent-pr-review` | Draft PR open; waiting for a person to review it | Claude Code |
 | `agent-blocked` | Claude asked a question, or a run stopped | Claude Code |
+| `agent-done` | PR merged and issue closed; marks work the pipeline delivered | Claude Code (next `/issue-sdlc` run) |
 
 The two human gates are approving the plan (`agent-plan-review` → `agent-build`) and merging the PR. `ready` and `in-progress` stay human-owned labels, so the two pipelines never trigger each other. New pipeline issues use the "Agent task" issue form (`.github/ISSUE_TEMPLATE/agent-task.yml`); PRs fill in `.github/pull_request_template.md`.
 

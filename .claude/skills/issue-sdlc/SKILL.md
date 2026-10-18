@@ -32,6 +32,19 @@ A change to the vault-posture skill also follows CLAUDE.md "Rules for
 changing the skill" (policy grants via `scripts/gen_policies.py` and
 `task policies`, field allowlists, coverage scopes, the new-rule checklist).
 
+## 0. Close out merged work
+
+Before finding work, relabel finished issues (bookkeeping, not a stage).
+REST only, so it also works where GitHub GraphQL is blocked:
+
+- `gh api "repos/{owner}/{repo}/issues?state=closed&labels=agent-pr-review" --jq '.[].number'`
+- for each N, the merged PR:
+  `gh api "repos/{owner}/{repo}/pulls?state=closed&head={owner}:agent/issue-N" --jq '.[] | select(.merged_at) | .number'`
+- if there is one: `gh api -X DELETE "repos/{owner}/{repo}/issues/N/labels/agent-pr-review"`
+  and `gh api -X POST "repos/{owner}/{repo}/issues/N/labels" -f "labels[]=agent-done"`
+
+Leave an issue closed without a merged PR alone and mention it in the report.
+
 ## 1. Find work
 
 If $ARGUMENTS holds a number, use that issue or PR. Otherwise check
@@ -95,7 +108,7 @@ The issue stays agent-pr-review.
 ## 3. Report
 
 One line: the issue or PR, the stage run, the outcome, the new label,
-and any link. Then stop.
+and any link, plus any issues moved to agent-done in step 0. Then stop.
 
 ## Never
 

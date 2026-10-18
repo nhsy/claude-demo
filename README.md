@@ -94,7 +94,7 @@ Claude Code works labelled GitHub issues through the SDLC from your terminal: re
 ```
 agent-ready ─▶ /issue-sdlc plans ─▶ agent-plan-review ─▶ (you approve) agent-build
             ─▶ /issue-sdlc builds ─▶ draft PR, agent-pr-review ─▶ (you review: request changes ⟲ /issue-sdlc fixes)
-            ─▶ (you) Rebase and merge, which closes the issue
+            ─▶ (you) Rebase and merge, which closes the issue ─▶ next /issue-sdlc run: agent-done
 any stage ─▶ agent-blocked (question or failed run) ─▶ answer, then re-add agent-ready
 ```
 
