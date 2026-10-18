@@ -3,7 +3,10 @@
 
 Namespace-local rules repeat once per nesting level ("+" = one namespace segment): a token
 created in the root namespace is checked against "<ns path>/<request path>" for requests
-made inside a child namespace. tests/test_policy.py fails if the committed files drift.
+made inside a child namespace. Mount-relative rules ("{m}" = the mount path) also repeat once
+per mount depth, so auth/k8s/prod/ and pki/int/ are covered like auth/k8s/ and pki/. Globs that
+two (level, depth) pairs both produce are written once. tests/test_policy.py fails if the
+committed files drift.
 """
 
 import sys
@@ -11,6 +14,7 @@ from pathlib import Path
 
 POLICY_DIR = Path(__file__).resolve().parents[1] / "skills/vault-posture/policies"
 LEVELS = 6  # root + MAX_NAMESPACE_DEPTH (5) levels, as in vault_posture.py
+MOUNT_DEPTH = 3  # mount paths of up to 3 segments (auth/a/b/c/, a/b/c/); deeper ones read as denied
 
 BASE_HEADER = """\
 # vault-posture-readonly: the base policy the vault-posture skill's token needs.
@@ -22,7 +26,8 @@ BASE_HEADER = """\
 #   vault policy write vault-posture-readonly vault-posture-readonly.hcl
 #   vault token create -policy=vault-posture-readonly -no-default-policy -orphan -ttl=1h
 #
-# Namespace-local rules repeat for the root namespace and five nesting levels.
+# Namespace-local rules repeat for the root namespace and five nesting levels, and
+# mount-relative rules for mount paths of one to three segments (auth/k8s/prod/, pki/int/).
 """
 
 PKI_HEADER = """\
@@ -35,7 +40,8 @@ PKI_HEADER = """\
 #   vault policy write vault-posture-pki-reader vault-posture-pki-reader.hcl
 #   vault token create -policy=vault-posture-readonly -policy=vault-posture-pki-reader -no-default-policy -orphan -ttl=1h
 #
-# Namespace-local rules repeat for the root namespace and five nesting levels.
+# Namespace-local rules repeat for the root namespace and five nesting levels, and
+# mount-relative rules for mount paths of one to three segments (auth/k8s/prod/, pki/int/).
 """
 
 # Root namespace only: cluster-wide endpoints.
@@ -57,22 +63,22 @@ ROOT_RULES = [
 NAMESPACE_RULES = [
     ("Namespace discovery", "sys/namespaces/", ["list"]),
     ("Auth mounts and roles: JWT/OIDC, Kubernetes, AppRole (role/<name> only: never role-id or secret-id)", "sys/auth", ["read"]),
-    (None, "auth/+/role/", ["list"]),
-    (None, "auth/+/role/+", ["read"]),
+    (None, "auth/{m}role/", ["list"]),
+    (None, "auth/{m}role/+", ["read"]),
     ("Token roles", "auth/token/roles/", ["list"]),
     (None, "auth/token/roles/+", ["read"]),
 ]
 
 PKI_RULES = [
     ("Mount discovery (finds mounts of type pki)", "sys/mounts", ["read"]),
-    ("Issuers: the script parses the public certificate and never stores the PEM", "+/issuers/", ["list"]),
-    (None, "+/issuer/+", ["read"]),
-    ("Mount configuration", "+/config/auto-tidy", ["read"]),
-    (None, "+/config/crl", ["read"]),
-    (None, "+/config/urls", ["read"]),
+    ("Issuers: the script parses the public certificate and never stores the PEM", "{m}issuers/", ["list"]),
+    (None, "{m}issuer/+", ["read"]),
+    ("Mount configuration", "{m}config/auto-tidy", ["read"]),
+    (None, "{m}config/crl", ["read"]),
+    (None, "{m}config/urls", ["read"]),
 ]
 
-# Defence in depth for when this policy is attached next to broader ones.
+# Defence in depth for when this policy is attached next to broader ones. Root namespace only.
 DENY_RULES = [
     "+/creds/*",
     "+/issue/*",
@@ -80,10 +86,14 @@ DENY_RULES = [
     "sys/wrapping/unwrap",
     "sys/generate-root/update",
     "sys/rekey/update",
-    "auth/+/role/+/role-id",
-    "auth/+/role/+/secret-id",
-    "auth/+/role/+/secret-id/*",
-    "auth/+/role/+/secret-id-accessor/*",
+]
+# AppRole secrets, at every namespace level and mount depth the role grants above reach: they
+# outrank auth/{m}role/+ wherever both match (e.g. a role named "role" on a shallower mount).
+APPROLE_DENY_RULES = [
+    "auth/{m}role/+/role-id",
+    "auth/{m}role/+/secret-id",
+    "auth/{m}role/+/secret-id/*",
+    "auth/{m}role/+/secret-id-accessor/*",
 ]
 
 
@@ -92,22 +102,29 @@ def block(path: str, caps: list[str]) -> str:
     return f'path "{path}" {{\n  capabilities = [{quoted}]\n}}\n'
 
 
+def expand(path: str, levels: int) -> list[str]:
+    """Every glob for path across namespace levels and, for "{m}" paths, mount depths; no repeats."""
+    depths = range(1, MOUNT_DEPTH + 1) if "{m}" in path else [0]
+    globs = ["+/" * level + path.replace("{m}", "+/" * depth) for level in range(levels) for depth in depths]
+    return list(dict.fromkeys(globs))
+
+
 def section(title: str, rules: list, levels: int) -> str:
     out = [f"\n# ---- {title}\n"]
     for comment, path, caps in rules:
         if comment:
             out.append(f"\n# {comment}\n")
-        for level in range(levels):
-            if path == "sys/namespaces/" and level == levels - 1:
-                continue  # the deepest level has no children to discover
-            out.append(block("+/" * level + path, caps))
+        # The deepest level has no children to discover.
+        for glob in expand(path, levels - 1 if path == "sys/namespaces/" else levels):
+            out.append(block(glob, caps))
     return "".join(out)
 
 
 def base_policy() -> str:
     text = BASE_HEADER + section("root namespace (cluster-wide)", ROOT_RULES, 1) + section("every namespace level", NAMESPACE_RULES, LEVELS)
     text += "\n# ---- defence in depth: credential-minting, token-consuming and AppRole secret endpoints\n"
-    return text + "".join(block(p, ["deny"]) for p in DENY_RULES)
+    text += "".join(block(p, ["deny"]) for p in DENY_RULES)
+    return text + "".join(block(g, ["deny"]) for p in APPROLE_DENY_RULES for g in expand(p, LEVELS))
 
 
 def pki_policy() -> str:
