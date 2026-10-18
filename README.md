@@ -99,3 +99,7 @@ evals/                 skill eval cases
 Taskfile.yml           every workflow
 CLAUDE.md              guidance for Claude Code working on this repo
 ```
+
+## License
+
+[MPL-2.0](LICENSE), matching the vault-ops skill.
