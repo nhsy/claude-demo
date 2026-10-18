@@ -85,7 +85,7 @@ All are in-memory dev servers with root token `root`. `task seed` (`scripts/seed
 
 ### CI
 
-`.github/workflows/ci.yml` runs `task lint`, `task plugin:validate`, `task test`, then `task test:e2e` against a local `vault server -dev`.
+`.github/workflows/ci.yml` runs `task lint`, `task plugin:validate`, `task test`, then two e2e jobs in parallel: `integration` runs `task test:e2e` against a local `vault server -dev`, and `compose` runs `task test:e2e:compose` against the Community container in `compose.yaml`.
 
 ## Issue pipeline (`/issue-sdlc`)
 
