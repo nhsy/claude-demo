@@ -60,6 +60,7 @@ Only add `agent-ready` when an issue has all of these; vague issues end in `agen
 - Scope limits: what is out of scope, and which files or modules to leave alone
 - Links to related issues, designs or logs
 - A size small enough for one PR; split anything larger first
+- Consistent and doable: the proposal and scope limits agree, anything it depends on is done or covered by its own issue, and it needs nothing the agent can't get (such as an Enterprise licence)
 
 ## Layout
 

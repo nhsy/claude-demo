@@ -39,3 +39,5 @@ body:
           required: true
         - label: Every acceptance criterion can be tested
           required: true
+        - label: The proposal and scope agree, and it needs nothing the agent can't get (such as an Enterprise licence)
+          required: true
