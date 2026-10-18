@@ -95,7 +95,7 @@ Claude Code works labelled GitHub issues through the SDLC from your terminal: re
 agent-ready ─▶ /issue-sdlc plans ─▶ agent-plan-review ─▶ (you comment "Approved") agent-build
             ─▶ /issue-sdlc builds ─▶ draft PR, agent-pr-review ─▶ (you comment, set agent-fix on the PR ⟲ /issue-sdlc fixes)
             ─▶ (you) Rebase and merge, which closes the issue ─▶ next /issue-sdlc run: agent-done
-any stage ─▶ agent-blocked (question or failed run) ─▶ answer, then re-add agent-ready
+any stage ─▶ agent-blocked (question or failed run) ─▶ answer, then re-add the stage's label (agent-ready, agent-build or agent-fix)
 ```
 
 Labels, the definition of ready, and branch and commit conventions are in [CLAUDE.md](CLAUDE.md). New work uses the **Agent task** issue form; `/issue-sdlc` fills in the PR template.
@@ -103,12 +103,12 @@ Labels, the definition of ready, and branch and commit conventions are in [CLAUD
 **One-time setup** (needs `gh` signed in with admin rights on the repo):
 
 1. `task github:setup`: creates the eight `agent-*` labels with colours and descriptions (rerunning resets them), then checks the merge settings without changing them. If they differ from rebase merging only with automatic head-branch deletion, it prints each setting to change under **Settings → General → Pull Requests**. It uses only the REST API (`gh api`), so it also works where GitHub GraphQL is blocked, as in Claude Code cloud sessions.
-2. Protect `main` with a branch protection rule or ruleset that requires a review, passing checks and linear history (linear history rejects any PR containing a merge commit).
+2. Protect `main` with a branch protection rule or ruleset that requires a pull request, passing checks and linear history (linear history rejects any PR containing a merge commit). Don't require an approving review while Claude Code works as your GitHub account: it opens PRs as you, GitHub doesn't let you approve your own PR, and every merge would need an admin bypass. Require one once the agent has its own identity (a GitHub App or machine user).
 3. In Claude Code: `/plugin install code-review@claude-plugins-official` and `/plugin install pr-review-toolkit@claude-plugins-official`.
 
-`.claude/settings.json` lets the skill run routine `gh`, `git` and `task` commands without prompting, and denies merging PRs, closing issues, merge commits, pushes or force-pushes to `main`, and staging everything at once (`git add .`, `-A`, `--all`, `-u`, `git commit -a`): files are staged by name.
+`.claude/settings.json` lets the skill run routine `gh`, `git` and `task` commands without prompting, and denies merging PRs, closing issues, merge commits, pushes or force-pushes to `main`, and staging everything at once (`git add .`, `-A`, `--all`, `-u`, `git commit -a`): files are staged by name. The Fix stage's `gh pr edit`, `git range-diff` and `git -c sequence.editor=true rebase origin/main` aren't on the allow list yet, so they prompt until you add them.
 
-**Review and merge:** for a second opinion, open a fresh Claude Code session on the PR branch and run `/pr-review-toolkit:review-pr` or `/code-review`. To ask for changes, leave review or line comments, then add the `agent-fix` label to the PR; the next `/issue-sdlc` run picks it up first. (A "Request changes" review won't work: Claude Code opens PRs as your account, and GitHub doesn't let an author request changes on their own PR.) When you're satisfied, mark the PR ready, approve it and use **Rebase and merge**. If a session dies mid-stage, remove `agent-working` from the issue by hand.
+**Review and merge:** for a second opinion, open a fresh Claude Code session on the PR branch and run `/pr-review-toolkit:review-pr` or `/code-review`. To ask for changes, leave review or line comments, then add the `agent-fix` label to the PR; the next `/issue-sdlc` run picks it up first. (A "Request changes" review won't work: Claude Code opens PRs as your account, and GitHub doesn't let an author request changes on their own PR.) When you're satisfied, tick the PR's reviewer checklist, mark it ready and use **Rebase and merge**; the checklist stands in for an approval, which GitHub won't let you give your own PR. If a session dies mid-stage, remove `agent-working` from the issue or PR by hand and re-add its stage label (`agent-ready`, `agent-build` or `agent-fix`).
 
 ## Layout
 
