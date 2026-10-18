@@ -7,6 +7,7 @@
 #   VP-PLUG-001/002   an external plugin registered without a version
 #   VP-ROLE-001..009  JWT, Kubernetes, AppRole and token roles with loose bindings
 #   VP-AWS-001..004   AWS IAM and EC2 roles (written without AWS credentials: no unique-ID lookups)
+#   VP-CERT-001/002   TLS certificate roles with no constraint and a catch-all CN (throwaway CA)
 #   VP-PKI-002..006/008  short-lived issuers, no AIA URLs, auto-tidy off, CRL+OCSP off, leaf_not_after=permit
 # auth/k8s/prod/ and ca/int/ (two-segment mounts) show the policies reach deeper mount paths.
 # Unit tests cover what a dev server can't show: VP-QUOTA-001 (conflicts with 003), VP-SEC-003
@@ -48,6 +49,7 @@ enable_auth jwt
 enable_auth kubernetes
 enable_auth approle
 enable_auth aws
+enable_auth cert
 enable_auth kubernetes k8s/prod
 # A throwaway validation key: the JWT roles are never logged into.
 pubkey="$(openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 2>/dev/null | openssl pkey -pubout)"
@@ -70,6 +72,11 @@ write auth/aws/role/any-principal auth_type=iam bound_iam_principal_arn='arn:aws
 write auth/aws/role/scoped auth_type=iam bound_iam_principal_arn=arn:aws:iam::123456789012:role/app resolve_aws_unique_ids=false token_policies=app
 write auth/aws/role/ec2-region-only auth_type=ec2 bound_region=us-east-1 token_policies=app
 write auth/aws/role/ec2-migrating auth_type=ec2 bound_account_id=123456789012 allow_instance_migration=true token_policies=app
+# A throwaway self-signed CA (its key is discarded): the cert roles are never logged into.
+ca="$(openssl req -x509 -newkey rsa:2048 -nodes -keyout /dev/null -subj '/CN=posture client CA' -days 30 2>/dev/null)"
+write auth/cert/certs/any-cert certificate="$ca" token_policies=app
+write auth/cert/certs/wild certificate="$ca" allowed_common_names='*' token_policies=app
+write auth/cert/certs/scoped certificate="$ca" allowed_common_names=svc.example.com token_policies=app
 
 # ---- PKI
 enable_pki() { vault secrets list -format=json | jq -e --arg p "$1/" '.[$p]' >/dev/null || vault secrets enable -path="$1" pki >/dev/null; }
