@@ -1,5 +1,7 @@
 # Secrets / local config
 .env
+.env.*
+!.env.template
 *.pem
 *.key
 
@@ -8,6 +10,10 @@
 
 # claude plugin eval run output
 evals/results/
+
+# Claude Code personal settings and notes (shared ones are committed)
+.claude/settings.local.json
+CLAUDE.local.md
 
 # Python
 __pycache__/
@@ -21,4 +27,5 @@ htmlcov/
 
 # IDE / OS
 .idea/
+.vscode/
 .DS_Store
