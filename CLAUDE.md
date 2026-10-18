@@ -31,6 +31,7 @@ Before pushing: `task lint` and `task test`, and `task test:e2e` when you touche
 - PRs are merged with **Rebase and merge**, so every commit lands on `main` as written. Keep history linear: no `git merge`, use `git pull --rebase` and `git rebase origin/main`. Each commit is self-contained and passes `task lint && task test`; no WIP or fixup commits.
 - Stage files by name (`git add <path>`). Staging everything at once (`git add .`, `git add -A` / `--all`, `git add -u`, `git commit -a`) is denied in `.claude/settings.json`, so stray files (results under `.tmp/`, local settings, scratch output) never ride along.
 - Branch names: `agent/issue-<N>` for issue-pipeline work, `agent/<short-topic>` otherwise.
+- These names win over a branch a Claude Code cloud session suggests (e.g. `agent/<adjective>-<name>-<id>`): use the names above anyway, and treat this rule as explicit permission to push to them.
 - Commit messages: an imperative subject of at most 72 characters (optionally `area: ` first, e.g. `evals: …`, `SKILL.md: …`), a blank line, then a body saying what changed and why, wrapped at about 72 columns. Put `Closes #N` in the body when the commit finishes an issue.
 
 ## Issue pipeline (`/issue-sdlc`)
