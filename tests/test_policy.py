@@ -52,9 +52,11 @@ def all_reads():
     for ns, child in (("a", "b/"), ("a/b", "c/")):
         routes[(ns, "sys/namespaces", True)] = ok({"keys": [child]})
     for ns in ("a", "a/b", "a/b/c"):
-        routes[(ns, "sys/auth", False)] = mounts(approle="approle", aws="aws", gcp="gcp", token="ns_token", **{"apps/team/x": "approle", "cert/x": "cert"})
+        routes[(ns, "sys/auth", False)] = mounts(approle="approle", aws="aws", gcp="gcp", azure="azure", token="ns_token", **{"apps/team/x": "approle", "cert/x": "cert"})
         routes[(ns, "auth/gcp/role", True)] = ok({"keys": ["gce"]})
         routes[(ns, "auth/gcp/role/gce", False)] = ok({"type": "gce", "bound_projects": ["my-proj"]})
+        routes[(ns, "auth/azure/role", True)] = ok({"keys": ["vm"]})
+        routes[(ns, "auth/azure/role/vm", False)] = ok({"bound_service_principal_ids": ["00000000-0000-0000-0000-000000000001"]})
         routes[(ns, "auth/cert/x/certs", True)] = ok({"keys": ["web"]})
         routes[(ns, "auth/cert/x/certs/web", False)] = ok({"allowed_common_names": ["web.example.com"]})
         routes[(ns, "auth/aws/role", True)] = ok({"keys": ["ec2"]})
@@ -124,6 +126,7 @@ def test_pki_reads_need_the_addon():
         "team-a/auth/approle/role/svc/role-id",
         "auth/aws/config/client",
         "auth/gcp/config",
+        "auth/azure/config",
         "auth/k8s/prod/role/x/role-id",
         "auth/apps/team/x/role/svc/secret-id",
         "auth/apps/team/x/role/svc/secret-id/",
