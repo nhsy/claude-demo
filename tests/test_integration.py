@@ -24,6 +24,8 @@ SEEDED_RULES = {
     "VP-PLUG-002",
     *(f"VP-ROLE-00{i}" for i in range(1, 10)),
     *(f"VP-AWS-00{i}" for i in range(1, 5)),
+    "VP-CERT-001",
+    "VP-CERT-002",
     "VP-PKI-002",
     "VP-PKI-003",
     "VP-PKI-004",
@@ -37,6 +39,8 @@ SEEDED_CONTROLS = [
     ("VP-ROLE-002", "auth/jwt/role/break-glass"),
     ("VP-AWS-001", "auth/aws/role/scoped"),
     ("VP-AWS-002", "auth/aws/role/ec2-migrating"),
+    ("VP-CERT-001", "auth/cert/certs/scoped"),
+    ("VP-CERT-002", "auth/cert/certs/scoped"),
 ]
 
 
@@ -87,6 +91,8 @@ def test_seeded_role_and_pki_details(posture):
     assert ("VP-AWS-002", "auth/aws/role/ec2-region-only") in by_path
     assert ("VP-AWS-003", "auth/aws/role/scoped") in by_path
     assert ("VP-AWS-004", "auth/aws/role/ec2-migrating") in by_path
+    assert ("VP-CERT-001", "auth/cert/certs/any-cert") in by_path
+    assert ("VP-CERT-002", "auth/cert/certs/wild") in by_path
     assert ("VP-PKI-006", "pki_off/") in by_path
     # Two-segment mounts are read with the read-only token too.
     assert ("VP-ROLE-005", "auth/k8s/prod/role/any-pod") in by_path
