@@ -254,6 +254,9 @@ RULES: dict[str, Rule] = {
     "VP-GCP-002": Rule("high", "roles", "GCP GCE role is not bound to a project or service account"),
     "VP-GCP-003": Rule("medium", "roles", "GCP IAM role accepts every service account in its projects"),
     "VP-GCP-004": Rule("low", "roles", "GCP IAM role accepts signed JWTs valid longer than 15 minutes"),
+    "VP-AZURE-001": Rule("medium", "roles", "Azure role accepts any identity in the tenant"),
+    "VP-AZURE-002": Rule("low", "roles", "Azure role binds no specific service principal or group"),
+    "VP-AZURE-003": Rule("low", "roles", "Azure role binds a resource group or scale set in any subscription"),
     "VP-CERT-001": Rule("medium", "roles", "Cert auth role accepts any certificate its CA signed"),
     "VP-CERT-002": Rule("medium", "roles", "Cert auth role matches names with a catch-all wildcard"),
     "VP-PKI-001": Rule("high", "pki", "PKI issuer certificate has expired"),
@@ -901,6 +904,8 @@ def check_roles(data: RoleData) -> list[Finding]:
             found.extend(_check_aws_role(role))
         if role.source == "gcp":
             found.extend(_check_gcp_role(role))
+        if role.source == "azure":
+            found.extend(_check_azure_role(role))
         if role.source == "cert":
             found.extend(_check_cert_role(role))
     return found
@@ -1042,6 +1047,67 @@ def _check_gcp_role(role: AuthRole) -> list[Finding]:
                     bound_labels=c.get("bound_labels") or {},
                 )
             )
+    return found
+
+
+# Resource bounds Vault verifies at login by fetching the VM or scale set; bound_locations also
+# narrows, but any VM in the tenant in that region matches it.
+AZURE_RESOURCE_BOUNDS = ("bound_subscription_ids", "bound_resource_groups", "bound_scale_sets")
+
+
+def _azure_specific(ids: list[str]) -> bool:
+    # Vault globs only on a list that is exactly ["*"]; a "*" next to other IDs is matched literally.
+    return bool(ids) and ids != ["*"]
+
+
+def _check_azure_role(role: AuthRole) -> list[Finding]:
+    c = role.config
+    sps = [str(s) for s in as_list(c.get("bound_service_principal_ids"))]
+    groups = [str(g) for g in as_list(c.get("bound_group_ids"))]
+    locations = [str(loc) for loc in as_list(c.get("bound_locations"))]
+    if _azure_specific(sps) or _azure_specific(groups):
+        identity = "pinned"
+    elif (sps == ["*"]) != (groups == ["*"]):
+        identity = "wildcard"
+    else:
+        # Both empty or both "*": login refuses the role since plugin v0.21.0 (Vault 1.20).
+        return [
+            _role_finding(
+                "VP-AZURE-002",
+                role,
+                f"Azure role '{role.name}' binds no specific service principal or group: Vault 1.20+ refuses every login through it, "
+                "older versions admit any identity in the tenant that matches its other bounds.",
+                bound_service_principal_ids=sps,
+                bound_group_ids=groups,
+                bound_locations=locations,
+                **{b: [str(v) for v in as_list(c.get(b))] for b in AZURE_RESOURCE_BOUNDS},
+            )
+        ]
+    found: list[Finding] = []
+    if identity == "wildcard" and not any(as_list(c.get(b)) for b in AZURE_RESOURCE_BOUNDS):
+        field_name = "bound_service_principal_ids" if sps == ["*"] else "bound_group_ids"
+        found.append(
+            _role_finding(
+                "VP-AZURE-001",
+                role,
+                f"Azure role '{role.name}' binds {field_name}=* with no subscription, resource group or scale set bound: any identity in the configured tenant"
+                + (f" with a VM in {', '.join(locations)}" if locations else "")
+                + " can log in.",
+                wildcard_field=field_name,
+                bound_locations=locations,
+            )
+        )
+    scoped = [b for b in ("bound_resource_groups", "bound_scale_sets") if as_list(c.get(b))]
+    if scoped and not as_list(c.get("bound_subscription_ids")) and not _azure_specific(sps):
+        found.append(
+            _role_finding(
+                "VP-AZURE-003",
+                role,
+                f"Azure role '{role.name}' binds {' and '.join(scoped)} without bound_subscription_ids: a same-named resource in any subscription of the tenant matches.",
+                **{b: [str(v) for v in as_list(c.get(b))] for b in scoped},
+                bound_group_ids=groups,
+            )
+        )
     return found
 
 
