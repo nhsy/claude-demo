@@ -24,6 +24,11 @@ Every workflow is a Task target; run `task` to list them. Don't call the scripts
 
 Before pushing: `task lint` and `task test`, and `task test:e2e` when you touched collection, policies or seeding.
 
+## Git workflow
+
+- Only commit to branches; never commit or push to `main` directly. Changes reach `main` through a pull request.
+- Anything that lands on `main` needs the user's explicit confirmation first: merging a PR (any merge method), pushing to it, or rebasing it. CI passing is not confirmation; ask, then merge.
+
 ## Layout
 
 ```
