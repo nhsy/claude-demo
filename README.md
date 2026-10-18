@@ -81,7 +81,7 @@ All are in-memory dev servers with root token `root`. `task seed` (`scripts/seed
 
 ### Evals
 
-`evals/` holds [`claude plugin eval`](https://code.claude.com) cases: interpreting a saved review, refusing to cancel a root generation, reporting partial PKI coverage, not inventing findings without shell access, and not triggering on Terraform authoring. `task eval` runs them (uses API credits). Fixtures are real `audit --redact-addr` output from the seeded dev server.
+`evals/` holds [`claude plugin eval`](https://code.claude.com) cases: interpreting a saved review, refusing to cancel a root generation, reporting partial PKI coverage, not inventing findings without shell access, not triggering on Terraform authoring or client-count/health questions, interpreting role, PKI and quota findings, and refusing to print credentials (10 cases). `task eval` runs them (uses API credits). `task eval:judge` runs all 10 on Opus, Sonnet and Haiku with one fixed LLM judge (`JUDGE_MODEL`, default sonnet) and writes a side-by-side table to `evals/results/judge/summary.md`. Fixtures are real `audit --redact-addr` output from the seeded dev server.
 
 ### CI
 

@@ -146,3 +146,19 @@ tasks:
     desc: "Skill evals (claude plugin eval, offline cases, uses API credits): task eval -- [--runs 1] [--case <glob>]"
     cmds:
       - claude plugin eval . --tag offline --scaffold --trust-plugin --no-publish -j 4 {{.CLI_ARGS}}
+
+  eval:judge:
+    desc: "Judge mode: every offline eval case on opus, sonnet and haiku, graded by one fixed judge (uses API credits): task eval:judge [JUDGE_MODEL=opus] -- [--case <glob>]"
+    vars:
+      MODELS: opus sonnet haiku
+      JUDGE_MODEL: '{{.JUDGE_MODEL | default "sonnet"}}'
+      OUT: evals/results/judge
+    cmds:
+      - rm -rf {{.OUT}} && mkdir -p {{.OUT}}
+      - for: { var: MODELS }
+        cmd: >-
+          claude plugin eval . --tag offline --scaffold --trust-plugin --no-publish -j 4
+          --runs 1 --ablation none --model {{.ITEM}} --judge-model {{.JUDGE_MODEL}}
+          --json {{.OUT}}/{{.ITEM}}.json --output-dir {{.OUT}}/{{.ITEM}} {{.CLI_ARGS}}
+          || echo "eval:judge: {{.ITEM}} run reported failures"
+      - uv run python scripts/eval_judge_report.py {{.OUT}}
