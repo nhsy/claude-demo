@@ -45,6 +45,7 @@ GitHub issues move through `agent-*` labels; the project skill `.claude/skills/i
 | `agent-plan-review` | Implementation plan posted as a comment; waiting for a person | Claude Code |
 | `agent-build` | Plan approved; `/issue-sdlc` will build it | a person |
 | `agent-pr-review` | Draft PR open; waiting for a person to review it | Claude Code |
+| `agent-fix` | On an agent PR: review feedback left; `/issue-sdlc` will address it | a person |
 | `agent-blocked` | Claude asked a question, or a run stopped | Claude Code |
 | `agent-done` | PR merged and issue closed; marks work the pipeline delivered | Claude Code (next `/issue-sdlc` run) |
 
