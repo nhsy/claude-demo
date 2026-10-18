@@ -158,6 +158,7 @@ tasks:
         label agent-plan-review 1D76DB "Implementation plan posted; waiting for a person to approve"
         label agent-build 5319E7 "Plan approved; /issue-sdlc will build it (set by a person)"
         label agent-pr-review 006B75 "Draft PR open; waiting for a person to review it"
+        label agent-fix 5319E7 "On an agent PR: feedback left; /issue-sdlc will address it (set by a person)"
         label agent-blocked B60205 "Claude asked a question or a run stopped; needs a person"
         label agent-done 6E7781 "PR merged and issue closed; delivered through the agent pipeline"
       # Merge settings are only checked, never written: changing them is the repo admin's call.

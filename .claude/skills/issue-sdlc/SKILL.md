@@ -78,9 +78,10 @@ Leave an issue closed without a merged PR alone and mention it in the report.
 If $ARGUMENTS holds a number, use that issue or PR. Otherwise check
 these queues in order and take the first (oldest) match:
 
-1. Fix: `gh pr list --state open --json number,headRefName,reviewDecision`
-   → a PR whose branch starts with `agent/`, reviewDecision is
-   CHANGES_REQUESTED, and whose latest commit is older than that review.
+1. Fix: `gh pr list --state open --label agent-fix --search "sort:created-asc" --json number,headRefName`
+   → the first PR whose branch starts with `agent/`. A person sets
+   agent-fix after leaving feedback; a "Request changes" review can't be
+   the trigger, because GitHub refuses it from the PR's own author.
 2. Build: `gh issue list --state open --label agent-build --search "sort:created-asc" --json number,title --limit 1`
 3. Plan: `gh issue list --state open --label agent-ready --search "sort:created-asc" --json number,title --limit 1`
 
@@ -129,16 +130,31 @@ For issue stages, claim the issue before any other work:
 If tests can't pass or the plan doesn't fit the code, comment why,
 move the label to agent-blocked, and stop.
 
-### Fix (agent/ PR with changes requested)
-1. Read the review: `gh pr view P --comments`.
-2. `git switch` to the PR branch and `git pull --rebase`.
-3. Make the requested changes as new, self-contained commits with clear
-   messages. Run `task lint && task test` (and `task test:e2e` when
-   relevant) until they pass.
-4. `git fetch origin && git rebase origin/main`, run the tests again, then
-   `git push --force-with-lease origin agent/<branch>`.
-5. `gh pr comment P` listing what you changed.
-The issue stays agent-pr-review.
+### Fix (agent/ PR labeled agent-fix)
+1. Claim the PR: `gh pr edit P --remove-label agent-fix --add-label agent-working`.
+2. Read all feedback from people ("What to trust"):
+   `gh pr view P --comments` shows reviews and PR comments, but not line
+   comments, so also read
+   `gh api --paginate "repos/{owner}/{repo}/pulls/P/comments" --jq '.[] | {id, path, line, author_association, body}'`.
+3. `git switch` to the PR branch and `git pull --rebase`.
+4. Fold each change into the commit it belongs to, so nothing lands on
+   main as a fixup: `git commit --fixup=<sha>` per change, then
+   `git -c sequence.editor=true rebase origin/main -i --autosquash --exec 'task lint && task test'`.
+   (`sequence.editor=true` keeps it non-interactive; `--autosquash`
+   without `-i` silently squashes nothing before git 2.44.) Only work
+   the reviewer asked to add, such as a new test, may be a commit of its
+   own. Run `task test:e2e` at the tip when it applies.
+5. Before pushing, save `git range-diff origin/<branch>...HEAD`, then
+   `git push --force-with-lease origin <branch>`.
+6. Reply on each line comment with what changed or why not:
+   `gh api -X POST "repos/{owner}/{repo}/pulls/P/comments/<id>/replies" -f body=...`.
+   Then `gh pr comment P` with a summary and the range-diff, so the
+   reviewer can see what changed despite the force-push.
+7. `gh pr edit P --remove-label agent-working`. The issue stays
+   agent-pr-review.
+If the feedback can't be met with passing tests, or contradicts the
+approved plan, push nothing: comment why, and move the PR's label from
+agent-working to agent-blocked.
 
 ## 3. Report
 
