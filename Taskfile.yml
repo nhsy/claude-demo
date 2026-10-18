@@ -1,0 +1,95 @@
+version: "3"
+
+dotenv: [".env"]
+
+vars:
+  SKILL_SCRIPT: skills/vault-posture/scripts/vault_posture.py
+
+tasks:
+  default:
+    cmds:
+      - task --list
+    silent: true
+
+  init:
+    desc: One-time setup (python deps, pre-commit hooks, .env from template)
+    cmds:
+      - test -f .env || cp .env.template .env
+      - uv sync
+      - uv run pre-commit install
+
+  up:
+    desc: Start the Community dev server on 127.0.0.1:${VAULT_CE_PORT} (default 8250)
+    cmds:
+      - ${CONTAINER_CLI:-docker} compose up -d --wait vault
+
+  up:ent:
+    desc: Start the Enterprise dev server on 127.0.0.1:${VAULT_ENT_PORT} (default 8260; needs VAULT_LICENSE)
+    preconditions:
+      - sh: test -n "${VAULT_LICENSE:-}"
+        msg: "VAULT_LICENSE is empty in .env"
+    cmds:
+      - ${CONTAINER_CLI:-docker} compose --profile ent up -d --wait vault-ent
+
+  down:
+    desc: Stop and remove the dev servers (in memory, so all state goes with them)
+    cmds:
+      - ${CONTAINER_CLI:-docker} compose --profile '*' down
+
+  logs:
+    desc: "Tail a dev server's log (SERVICE=vault-ent task logs for Enterprise)"
+    cmds:
+      - ${CONTAINER_CLI:-docker} compose logs -f --tail 50 {{.SERVICE | default "vault"}}
+
+  seed:
+    desc: Seed config that trips every live-testable VP rule (dev root token)
+    cmds:
+      - scripts/seed_findings.sh
+
+  token:
+    desc: Write the vault-posture-readonly policy and mint a 1h token to .tmp/posture-token
+    cmds:
+      - scripts/posture_token.sh
+
+  skill:run:
+    desc: "Run the skill script with the read-only token: task skill:run -- <audit|quotas|security>"
+    cmds:
+      - VAULT_TOKEN="$(cat .tmp/posture-token)" uv run --script {{.SKILL_SCRIPT}} {{.CLI_ARGS | default "--help"}}
+    preconditions:
+      - sh: test -s .tmp/posture-token
+        msg: "No read-only token; run: task token"
+
+  lint:
+    desc: Run all pre-commit hooks (ruff, shellcheck, gitleaks, yaml/json)
+    cmds:
+      - git ls-files -co --exclude-standard -z | xargs -0 uv run pre-commit run --files
+
+  test:
+    desc: Unit tests (no Vault needed), coverage >= 90%
+    cmds:
+      - uv run pytest -q --cov=vault_posture --cov-report=term-missing --cov-fail-under=90
+
+  test:integration:
+    desc: Integration tests against the seeded dev server with the read-only token
+    cmds:
+      - VAULT_TOKEN="$(cat .tmp/posture-token)" uv run pytest -q -m integration
+    preconditions:
+      - sh: test -s .tmp/posture-token
+        msg: "No read-only token; run: task up seed token"
+
+  test:e2e:
+    desc: "Fresh dev server -> seed -> token -> unit + integration tests -> remove (ENT=1 for Enterprise)"
+    cmds:
+      - scripts/e2e.sh
+
+  test:ci:
+    desc: CI pipeline (lint + plugin manifests + unit tests with coverage)
+    cmds:
+      - task: lint
+      - task: plugin:validate
+      - task: test
+
+  plugin:validate:
+    desc: Validate the plugin and marketplace manifests (strict)
+    cmds:
+      - claude plugin validate --strict .

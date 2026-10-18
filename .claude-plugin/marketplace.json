@@ -1,0 +1,14 @@
+{
+  "name": "vault-posture-skill",
+  "description": "Read-only HashiCorp Vault security posture skills for Claude Code.",
+  "owner": {
+    "name": "nhsy"
+  },
+  "plugins": [
+    {
+      "name": "vault-posture",
+      "source": ".",
+      "description": "Read-only HashiCorp Vault security posture review skill."
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+# Throwaway Vault dev servers for the vault-posture tests: in memory, plain HTTP, root token
+# from VAULT_DEV_ROOT_TOKEN (default `root`). Restarting a container wipes it, so re-run
+# `task seed` after `task up`.
+#   vault      Community (default)          http://127.0.0.1:${VAULT_CE_PORT:-8250}   task up
+#   vault-ent  Enterprise (profile `ent`)    http://127.0.0.1:${VAULT_ENT_PORT:-8260}  task up:ent
+# Enterprise needs VAULT_LICENSE in .env; it adds lease-count quotas (VP-QUOTA-002).
+# Ports differ from the vault-ops dev cluster (8210-8240) so both can run side by side.
+name: vault-posture
+
+x-vault: &vault
+  restart: "no"
+  cap_add:  # Vault 2.x needs both to start
+    - IPC_LOCK
+    - SETFCAP
+  # plugin_directory lets `task seed` register a dummy external plugin (VP-PLUG-*).
+  command: ["server", "-dev", "-dev-listen-address=0.0.0.0:8200", "-dev-no-store-token", "-config=/vault/config/dev.hcl"]
+  configs:
+    - source: vault-dev-config
+      target: /vault/config/dev.hcl
+  volumes:
+    - ./compose/plugins:/vault/plugins:ro
+  healthcheck:
+    test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8200/v1/sys/health"]
+    interval: 1s
+    timeout: 3s
+    retries: 30
+
+services:
+  vault:
+    <<: *vault
+    image: ${VAULT_CE_IMAGE:-docker.io/hashicorp/vault:2.1.1}
+    container_name: vault-posture-ce
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_DEV_ROOT_TOKEN:-root}
+    ports:
+      - "127.0.0.1:${VAULT_CE_PORT:-8250}:8200"
+
+  vault-ent:
+    <<: *vault
+    profiles: [ent]
+    image: ${VAULT_ENT_IMAGE:-docker.io/hashicorp/vault-enterprise:2.1.1-ent}
+    container_name: vault-posture-ent
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_DEV_ROOT_TOKEN:-root}
+      VAULT_LICENSE: ${VAULT_LICENSE:-}
+    ports:
+      - "127.0.0.1:${VAULT_ENT_PORT:-8260}:8200"
+
+configs:
+  vault-dev-config:
+    file: ./compose/dev.hcl
+
+networks:
+  default:
+    name: vault-posture
