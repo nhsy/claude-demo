@@ -170,6 +170,18 @@ def test_collect_roles_maps_oidc_and_namespaced_token_mounts():
     assert [(r.namespace, r.source, r.path) for r in data.roles] == [("team-a", "jwt", "auth/oidc/role/sso"), ("team-a", "token", "auth/token/roles/svc")]
 
 
+def test_collect_roles_reads_aws_roles():
+    body = {"auth_type": "iam", "bound_iam_principal_arn": ["arn:aws:iam::*:role/*"], "resolve_aws_unique_ids": False, "role_id": "rid", "role_tag": "", "alias_metadata": {}}
+    routes = {
+        ("sys/auth", False): mounts(aws="aws"),
+        ("auth/aws/role", True): ok({"keys": ["ci"]}),
+        ("auth/aws/role/ci", False): ok(body),
+    }
+    data = vp.collect_roles(FakeReader(routes), vp.Coverage(), [""])
+    assert [(r.source, r.path) for r in data.roles] == [("aws", "auth/aws/role/ci")]
+    assert data.roles[0].config == {"auth_type": "iam", "bound_iam_principal_arn": ["arn:aws:iam::*:role/*"], "resolve_aws_unique_ids": False}
+
+
 def test_collect_roles_denied_role_body_is_a_gap():
     routes = dict(COMMUNITY_ROUTES)
     routes[("auth/jwt/role/ci", False)] = hvac_exc.Forbidden()
