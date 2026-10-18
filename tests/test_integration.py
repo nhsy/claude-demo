@@ -24,6 +24,7 @@ SEEDED_RULES = {
     "VP-PLUG-002",
     *(f"VP-ROLE-00{i}" for i in range(1, 10)),
     *(f"VP-AWS-00{i}" for i in range(1, 5)),
+    *(f"VP-GCP-00{i}" for i in range(1, 5)),
     "VP-CERT-001",
     "VP-CERT-002",
     "VP-PKI-002",
@@ -39,6 +40,9 @@ SEEDED_CONTROLS = [
     ("VP-ROLE-002", "auth/jwt/role/break-glass"),
     ("VP-AWS-001", "auth/aws/role/scoped"),
     ("VP-AWS-002", "auth/aws/role/ec2-migrating"),
+    ("VP-GCP-001", "auth/gcp/role/long-jwt"),
+    ("VP-GCP-003", "auth/gcp/role/long-jwt"),
+    ("VP-GCP-002", "auth/gcp/role/gce-pinned"),
     ("VP-CERT-001", "auth/cert/certs/scoped"),
     ("VP-CERT-002", "auth/cert/certs/scoped"),
 ]
@@ -91,6 +95,10 @@ def test_seeded_role_and_pki_details(posture):
     assert ("VP-AWS-002", "auth/aws/role/ec2-region-only") in by_path
     assert ("VP-AWS-003", "auth/aws/role/scoped") in by_path
     assert ("VP-AWS-004", "auth/aws/role/ec2-migrating") in by_path
+    assert ("VP-GCP-001", "auth/gcp/role/any-sa") in by_path
+    assert ("VP-GCP-002", "auth/gcp/role/gce-zone-only") in by_path
+    assert ("VP-GCP-003", "auth/gcp/role/project-wide") in by_path
+    assert ("VP-GCP-004", "auth/gcp/role/long-jwt") in by_path
     assert ("VP-CERT-001", "auth/cert/certs/any-cert") in by_path
     assert ("VP-CERT-002", "auth/cert/certs/wild") in by_path
     assert ("VP-PKI-006", "pki_off/") in by_path
