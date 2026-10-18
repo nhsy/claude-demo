@@ -147,6 +147,22 @@ ROLE_SOURCES: dict[str, tuple[str, tuple[str, ...]]] = {
             *TOKEN_PARAM_FIELDS,
         ),
     ),
+    "gcp": (
+        "role",
+        (
+            "type",
+            "bound_service_accounts",
+            "bound_projects",
+            "bound_zones",
+            "bound_regions",
+            "bound_instance_groups",
+            "bound_labels",
+            "max_jwt_exp",
+            "allow_gce_inference",
+            "add_group_aliases",
+            *TOKEN_PARAM_FIELDS,
+        ),
+    ),
     # The role's trusted CA (`certificate`) is never kept.
     "cert": (
         "certs",

@@ -182,6 +182,18 @@ def test_collect_roles_reads_aws_roles():
     assert data.roles[0].config == {"auth_type": "iam", "bound_iam_principal_arn": ["arn:aws:iam::*:role/*"], "resolve_aws_unique_ids": False}
 
 
+def test_collect_roles_reads_gcp_roles():
+    body = {"type": "iam", "bound_service_accounts": ["*"], "max_jwt_exp": 900, "allow_gce_inference": True, "add_group_aliases": False, "role_id": "rid", "alias_metadata": {}}
+    routes = {
+        ("sys/auth", False): mounts(gcp="gcp"),
+        ("auth/gcp/role", True): ok({"keys": ["ci"]}),
+        ("auth/gcp/role/ci", False): ok(body),
+    }
+    data = vp.collect_roles(FakeReader(routes), vp.Coverage(), [""])
+    assert [(r.source, r.path) for r in data.roles] == [("gcp", "auth/gcp/role/ci")]
+    assert data.roles[0].config == {"type": "iam", "bound_service_accounts": ["*"], "max_jwt_exp": 900, "allow_gce_inference": True, "add_group_aliases": False}
+
+
 def test_collect_roles_reads_cert_roles_without_the_ca():
     body = {"certificate": "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n", "allowed_common_names": ["*"], "display_name": "web", "ocsp_enabled": False}
     routes = {
