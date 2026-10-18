@@ -1,25 +1,35 @@
 import json
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 import requests
 import vault_posture as vp
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from hvac import exceptions as hvac_exc
 
 ROOT = Path(__file__).resolve().parents[1]
-SCHEMA_PATH = ROOT / "skills/vault-posture/schemas/findings.schema.json"
-POLICY_PATH = ROOT / "skills/vault-posture/policies/vault-posture-readonly.hcl"
+SCHEMA_DIR = ROOT / "skills/vault-posture/schemas"
+POLICY_DIR = ROOT / "skills/vault-posture/policies"
+FIXTURE_POLICIES = Path(__file__).resolve().parent / "fixtures/policies"
 FAKE_TOKEN = "hvs.FAKE-TOKEN-must-never-appear"
-# Values the generate-root/rekey status endpoints return that must never reach a file.
-SECRET_MARKERS = ("NONCE-must-never-appear", "ENCODED-must-never-appear", "OTP-must-never-appear")
+# Values Vault returns that must never reach a file: seal-operation nonces/OTPs/encoded tokens,
+# and anything outside a role's allowlist.
+SECRET_MARKERS = ("NONCE-must-never-appear", "ENCODED-must-never-appear", "OTP-must-never-appear", "ROLE-ID-must-never-appear")
 NOW = datetime(2026, 10, 5, tzinfo=UTC)
 
 
 @pytest.fixture
 def schema():
-    return json.loads(SCHEMA_PATH.read_text())
+    return json.loads((SCHEMA_DIR / "findings.schema.json").read_text())
+
+
+@pytest.fixture
+def access_schema():
+    return json.loads((SCHEMA_DIR / "access.schema.json").read_text())
 
 
 def not_found(message=""):
@@ -38,6 +48,24 @@ def ok(data):
     return {"request_id": "r", "data": data}
 
 
+def make_pem(common_name="Test CA", days_left=10, key="rsa", now=NOW):
+    """A self-signed CA certificate expiring `days_left` days after `now`."""
+    private = rsa.generate_private_key(public_exponent=65537, key_size=2048) if key == "rsa" else ec.generate_private_key(ec.SECP256R1())
+    name = x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, common_name)])
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(private.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(days=365))
+        .not_valid_after(now + timedelta(days=days_left))
+        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .sign(private, hashes.SHA256())
+    )
+    return cert.public_bytes(serialization.Encoding.PEM).decode()
+
+
 def attempt_body(started=False):
     return {
         "started": started,
@@ -54,8 +82,17 @@ def plugin(name, ptype="secret", version="v1.0.0+builtin", builtin=True):
     return {"name": name, "type": ptype, "version": version, "builtin": builtin, "deprecation_status": "supported"}
 
 
-# Routes keyed by (path, is_list). A Community server with one path-scoped rate-limit quota,
-# a root generation and a rekey in progress, an old barrier key and one unversioned external plugin.
+def mounts(**types):
+    return ok({f"{path}/": {"type": mtype, "config": {}} for path, mtype in types.items()})
+
+
+# Dated from the real clock: the CLI judges expiry against the time it runs.
+CA_PEM = make_pem("Fixture CA", days_left=10, now=datetime.now(UTC))
+
+# Routes keyed by (path, is_list) in the root namespace. A Community server with one path-scoped
+# rate-limit quota, a root generation and a rekey in progress, an old barrier key, one unversioned
+# external plugin, an audience-only JWT role, a wildcard Kubernetes role and a PKI mount whose
+# only issuer expires in 10 days with auto-tidy off.
 COMMUNITY_ROUTES = {
     ("auth/token/lookup-self", False): ok({"policies": ["vault-posture-readonly"]}),
     ("sys/quotas/config", False): ok({"enable_rate_limit_audit_logging": False, "enable_rate_limit_response_headers": False, "rate_limit_exempt_paths": ["sys/health"]}),
@@ -74,6 +111,23 @@ COMMUNITY_ROUTES = {
             "detailed": [plugin("approle", "auth"), plugin("kv"), plugin("custom-db", "database", version="", builtin=False)],
         }
     ),
+    ("sys/namespaces", True): enterprise_only(),
+    ("sys/auth", False): mounts(token="token", jwt="jwt", kubernetes="kubernetes", userpass="userpass"),
+    ("auth/token/roles", True): not_found(),
+    ("auth/jwt/role", True): ok({"keys": ["ci"]}),
+    ("auth/jwt/role/ci", False): ok(
+        {"role_type": "jwt", "bound_audiences": ["https://github.com/acme"], "bound_subject": "", "bound_claims": None, "token_policies": ["deploy"], "role_id": SECRET_MARKERS[3]}
+    ),
+    ("auth/kubernetes/role", True): ok({"keys": ["any"]}),
+    ("auth/kubernetes/role/any", False): ok({"bound_service_account_names": ["*"], "bound_service_account_namespaces": ["*"], "token_policies": ["app"]}),
+    ("sys/mounts", False): mounts(secret="kv", pki="pki", sys="system"),
+    ("pki/config/auto-tidy", False): ok({"enabled": False, "interval_duration": 43200}),
+    ("pki/config/crl", False): ok({"disable": False, "ocsp_disable": False, "auto_rebuild": False}),
+    ("pki/config/urls", False): ok({"issuing_certificates": ["http://vault.test/v1/pki/ca"], "crl_distribution_points": [], "ocsp_servers": []}),
+    ("pki/issuers", True): ok({"keys": ["id-1"], "key_info": {"id-1": {"issuer_name": "root", "is_default": True}}}),
+    ("pki/issuer/id-1", False): ok(
+        {"issuer_id": "id-1", "issuer_name": "root", "certificate": CA_PEM, "ca_chain": [CA_PEM], "leaf_not_after_behavior": "err", "issuing_certificates": [], "revoked": False}
+    ),
 }
 
 HEALTH = {
@@ -86,6 +140,12 @@ HEALTH = {
 }
 
 
+def route(routes, namespace, path, is_list):
+    """Namespaced routes are keyed (namespace, path, is_list); root ones (path, is_list)."""
+    key = (namespace, path, is_list) if namespace else (path, is_list)
+    return routes.get(key, not_found())
+
+
 class FakeReader:
     """Stands in for vp.Reader: routes paths to canned responses or exceptions and records every call."""
 
@@ -93,16 +153,17 @@ class FakeReader:
         self.routes = routes
         self.calls = []
 
-    def get(self, path, params=None):
+    def get(self, path, params=None, namespace=""):
         is_list = bool(params and params.get("list"))
-        self.calls.append((path, is_list))
-        value = self.routes.get((path, is_list), not_found())
+        self.calls.append((namespace, path, is_list))
+        value = route(self.routes, namespace, path, is_list)
         if isinstance(value, Exception):
             raise value
         return value
 
     data = vp.Reader.data
     list = vp.Reader.list
+    list_info = vp.Reader.list_info
 
 
 @pytest.fixture
@@ -128,18 +189,20 @@ class FakeVault:
 def fake_vault(monkeypatch):
     """Patch requests at the session level: every HTTP request the script sends is recorded.
 
-    `.sent` holds (method, path, params) per request; tests may edit `.routes` before running.
+    `.sent` holds (method, namespace, path, params) per request; tests may edit `.routes` before running.
     """
     vault = FakeVault(routes=dict(COMMUNITY_ROUTES))
 
     def request(self, method, url, **kwargs):
         path = url.split("/v1/", 1)[1]
         params = kwargs.get("params") or {}
-        vault.sent.append((method.upper(), path, dict(params)))
-        assert kwargs.get("headers", {}).get("X-Vault-Token") == FAKE_TOKEN or path == "sys/health"
+        headers = kwargs.get("headers") or {}
+        namespace = (headers.get("X-Vault-Namespace") or "").strip("/")
+        vault.sent.append((method.upper(), namespace, path, dict(params)))
+        assert headers.get("X-Vault-Token") == FAKE_TOKEN or path == "sys/health"
         if path == "sys/health":
             return fake_response(200, HEALTH)
-        value = vault.routes.get((path, bool(params.get("list"))), not_found())
+        value = route(vault.routes, namespace, path, bool(params.get("list")))
         if isinstance(value, Exception):
             status = {hvac_exc.InvalidPath: 404, hvac_exc.Forbidden: 403, hvac_exc.InvalidRequest: 400}.get(type(value), 500)
             return fake_response(status, {"errors": value.errors or []})
@@ -149,4 +212,5 @@ def fake_vault(monkeypatch):
     monkeypatch.setenv("VAULT_ADDR", "http://vault.test:8200")
     monkeypatch.setenv("VAULT_TOKEN", FAKE_TOKEN)
     monkeypatch.delenv("VAULT_POSTURE_OUTPUT_DIR", raising=False)
+    monkeypatch.delenv("VAULT_NAMESPACE", raising=False)
     return vault

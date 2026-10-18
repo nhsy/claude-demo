@@ -3,40 +3,104 @@
   "$id": "https://github.com/nhsy/claude-demo/skills/vault-posture/schemas/findings.schema.json",
   "title": "vault-posture result document",
   "type": "object",
-  "required": ["run", "coverage", "summary", "findings", "data"],
+  "required": [
+    "run",
+    "coverage",
+    "summary",
+    "findings",
+    "data"
+  ],
   "additionalProperties": false,
   "properties": {
     "run": {
       "type": "object",
-      "required": ["tool", "tool_version", "schema_version", "generated_at", "cluster_name", "vault_addr", "vault_version", "edition"],
+      "required": [
+        "tool",
+        "tool_version",
+        "schema_version",
+        "generated_at",
+        "cluster_name",
+        "vault_addr",
+        "vault_version",
+        "edition",
+        "start_namespace"
+      ],
       "additionalProperties": false,
       "properties": {
-        "tool": {"const": "vault-posture"},
-        "tool_version": {"type": "string"},
-        "schema_version": {"type": "string"},
-        "generated_at": {"type": "string", "format": "date-time"},
-        "cluster_name": {"type": "string"},
-        "vault_addr": {"type": "string"},
-        "vault_version": {"type": "string"},
-        "edition": {"enum": ["community", "enterprise"]}
+        "tool": {
+          "const": "vault-posture"
+        },
+        "tool_version": {
+          "type": "string"
+        },
+        "schema_version": {
+          "type": "string"
+        },
+        "generated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "cluster_name": {
+          "type": "string"
+        },
+        "vault_addr": {
+          "type": "string"
+        },
+        "vault_version": {
+          "type": "string"
+        },
+        "edition": {
+          "enum": [
+            "community",
+            "enterprise"
+          ]
+        },
+        "start_namespace": {
+          "type": "string"
+        }
       }
     },
     "coverage": {
       "type": "object",
-      "required": ["complete", "scopes"],
+      "required": [
+        "complete",
+        "scopes"
+      ],
       "additionalProperties": false,
       "properties": {
-        "complete": {"type": "boolean"},
+        "complete": {
+          "type": "boolean"
+        },
         "scopes": {
           "type": "array",
           "items": {
             "type": "object",
-            "required": ["scope", "status"],
+            "required": [
+              "namespace",
+              "scope",
+              "status"
+            ],
             "additionalProperties": false,
             "properties": {
-              "scope": {"type": "string"},
-              "status": {"enum": ["ok", "absent", "denied", "unsupported", "not_applicable", "error"]},
-              "detail": {"type": "string"}
+              "namespace": {
+                "type": "string"
+              },
+              "scope": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "ok",
+                  "absent",
+                  "denied",
+                  "unsupported",
+                  "not_applicable",
+                  "error"
+                ]
+              },
+              "detail": {
+                "type": "string"
+              }
             }
           }
         }
@@ -44,19 +108,39 @@
     },
     "summary": {
       "type": "object",
-      "required": ["total", "by_severity", "by_rule"],
+      "required": [
+        "total",
+        "by_severity",
+        "by_rule"
+      ],
       "additionalProperties": false,
       "properties": {
-        "total": {"type": "integer", "minimum": 0},
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
         "by_severity": {
           "type": "object",
-          "required": ["high", "medium", "low", "info"],
-          "additionalProperties": {"type": "integer", "minimum": 0}
+          "required": [
+            "high",
+            "medium",
+            "low",
+            "info"
+          ],
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
         },
         "by_rule": {
           "type": "object",
-          "propertyNames": {"pattern": "^VP-[A-Z]+-[0-9]{3}$"},
-          "additionalProperties": {"type": "integer", "minimum": 1}
+          "propertyNames": {
+            "pattern": "^VP-[A-Z]+-[0-9]{3}$"
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
         }
       }
     },
@@ -64,25 +148,76 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["fingerprint", "rule_id", "severity", "category", "title", "object", "detail", "evidence"],
+        "required": [
+          "fingerprint",
+          "rule_id",
+          "severity",
+          "category",
+          "title",
+          "namespace",
+          "object",
+          "detail",
+          "evidence"
+        ],
         "additionalProperties": false,
         "properties": {
-          "fingerprint": {"type": "string", "pattern": "^[0-9a-f]{16}$"},
-          "rule_id": {"type": "string", "pattern": "^VP-[A-Z]+-[0-9]{3}$"},
-          "severity": {"enum": ["high", "medium", "low", "info"]},
-          "category": {"enum": ["quotas", "security", "plugins"]},
-          "title": {"type": "string"},
+          "fingerprint": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{16}$"
+          },
+          "rule_id": {
+            "type": "string",
+            "pattern": "^VP-[A-Z]+-[0-9]{3}$"
+          },
+          "severity": {
+            "enum": [
+              "high",
+              "medium",
+              "low",
+              "info"
+            ]
+          },
+          "category": {
+            "enum": [
+              "quotas",
+              "security",
+              "plugins",
+              "roles",
+              "pki"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
           "object": {
             "type": "object",
-            "required": ["kind", "path"],
+            "required": [
+              "kind",
+              "path"
+            ],
             "additionalProperties": false,
             "properties": {
-              "kind": {"type": "string"},
-              "path": {"type": ["string", "null"]}
+              "kind": {
+                "type": "string"
+              },
+              "path": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
             }
           },
-          "detail": {"type": "string"},
-          "evidence": {"type": "object"}
+          "detail": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "object"
+          },
+          "namespace": {
+            "type": "string",
+            "pattern": "^(/|.+/)$"
+          }
         }
       }
     },
@@ -90,8 +225,18 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "quotas": {"type": "object"},
-        "security": {"type": "object"}
+        "quotas": {
+          "type": "object"
+        },
+        "security": {
+          "type": "object"
+        },
+        "roles": {
+          "type": "object"
+        },
+        "pki": {
+          "type": "object"
+        }
       }
     }
   }

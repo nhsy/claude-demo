@@ -1,0 +1,61 @@
+# CLAUDE.md
+
+This repo is **vault-posture**: a read-only HashiCorp Vault security posture skill for Claude Code, shipped as a plugin (`.claude-plugin/`). The skill lives in `skills/vault-posture/`; everything else is its dev and test harness. It complements the separate vault-ops skill and must not duplicate its checks (health, inventory, policy hygiene, entities, client counts).
+
+## Use Task for everything
+
+Every workflow is a Task target; run `task` to list them. Don't call the scripts in `scripts/` or `pytest` directly unless you are debugging one of them; CI runs the same targets.
+
+| Goal | Command |
+| --- | --- |
+| First-time setup | `task init` |
+| Unit tests (no Vault) | `task test` |
+| Lint (ruff, shellcheck, gitleaks, yaml/json) | `task lint` |
+| Live dev server (local `vault server -dev`, port 8250) | `task dev:up` / `task dev:down` |
+| Same, in a container | `task up` / `task down` (`task up:ent` for Enterprise) |
+| Seed findings, mint the read-only token | `task seed`, `task token` |
+| Integration tests against the running server | `task test:integration` |
+| Everything on a fresh server | `task test:e2e` (`task test:e2e:compose` for containers) |
+| Run the skill script by hand | `task skill:run -- audit`, `task skill:access -- --policy tests/fixtures/policies --path secret/data/app/x` |
+| Regenerate the token policies | `task policies` |
+| Plugin manifest check | `task plugin:validate` |
+| Skill evals (spend API credits: ask first) | `task eval` |
+
+Before pushing: `task lint` and `task test`, and `task test:e2e` when you touched collection, policies or seeding.
+
+## Layout
+
+```
+skills/vault-posture/
+  SKILL.md                      instructions Claude follows (frontmatter description drives triggering)
+  scripts/vault_posture.py      the single-file uv script: all logic lives here
+  references/rules.md           VP-* rule catalogue (meaning, operator remediation, caveats, ranking)
+  schemas/*.schema.json         output document schemas (tests validate against them)
+  policies/*.hcl                GENERATED read-only token policies
+scripts/                        dev_up/down (vault server -dev), seed_findings, posture_token, e2e, gen_policies.py
+compose.yaml, compose/          container dev servers (Community + Enterprise profile) and the dummy plugin
+tests/                          pytest suite (see README.md for what each file covers)
+evals/                          claude plugin eval cases and fixtures
+```
+
+## Rules for changing the skill
+
+**Read-only is the product.** Breaking it is never an acceptable trade-off.
+
+- Vault is reached only through `Reader` in `vault_posture.py`, which only sends GET (lists are `GET ?list=true`). Never add a write, a `post`/`put`/`delete`, or a second HTTP client. `tests/test_readonly.py` asserts this end to end.
+- Every new endpoint needs, in the same change:
+  1. a grant in `scripts/gen_policies.py` (read/list only; per namespace level if namespace-local), then `task policies`. Never edit `policies/*.hcl` by hand: `tests/test_policy.py` fails on drift.
+  2. a field allowlist (`pick(body, FIELDS)`) so nothing unexpected reaches a file. Never write secret material: role IDs, secret IDs, nonces, OTPs, encoded tokens, private keys, certificate PEMs.
+  3. a coverage scope via `attempt(...)`, so a denied read is reported, not silently skipped.
+- Keep the split: `collect_*` does I/O and returns a dataclass; `check_*` is pure (takes the dataclass and `now`) and returns `Finding`s. Unit tests target `check_*`; `FakeReader` in `tests/conftest.py` drives `collect_*`.
+- A new rule needs: an entry in `RULES`, a row in `references/rules.md` with a real command (the test enforces the row exists), a firing and a quiet unit test, seeding in `scripts/seed_findings.sh` if a dev server can show it (add it to `SEEDED_RULES` in `tests/test_integration.py`), and a place in the Ranking section.
+- The script stays one self-contained file: no imports from the rest of the repo. Keep its PEP 723 dependency pins in step with `pyproject.toml`.
+- The `access` evaluator must match Vault. If you change `effective_capabilities` or `parse_policy`, extend `tests/fixtures/policies/` and `EXPECTED` in `tests/test_access.py`; the integration test re-checks every case against `sys/capabilities` on the dev server.
+
+## Gotchas
+
+- `vault write` to a PKI issuer replaces its whole config (it clears `issuer_name`): use `vault patch`. The seed script does.
+- Empty Vault lists answer 404; Enterprise-only paths answer 404 `enterprise-only feature`; recovery-key endpoints answer 404/400 on Shamir seals. `classify()` maps these to `absent`, `unsupported` and `not_applicable`, none of which make coverage incomplete.
+- `-dev-plugin-dir` tries to mount every plugin it finds, so the dummy plugin would crash the server; the dev servers use `plugin_directory` in config instead.
+- Results and tokens live under `.tmp/` (gitignored). Never commit anything from it; eval fixtures must be generated with `--redact-addr`.
+- `task plugin:validate` runs without `--strict` because this CLAUDE.md sits at the plugin root (a warning: it's repo guidance, not plugin context).

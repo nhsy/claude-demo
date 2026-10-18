@@ -1,4 +1,5 @@
-"""Live tests against a dev server seeded by scripts/seed_findings.sh, with a vault-posture-readonly token.
+"""Live tests against a dev server seeded by scripts/seed_findings.sh, with a token holding
+vault-posture-readonly and vault-posture-pki-reader (scripts/posture_token.sh).
 
 task up && task seed && task token && task test:integration      (or: task test:e2e)
 """
@@ -13,7 +14,24 @@ from hvac import exceptions as hvac_exc
 
 pytestmark = pytest.mark.integration
 
-SEEDED_RULES = {"VP-QUOTA-003", "VP-QUOTA-004", "VP-SEC-001", "VP-SEC-002", "VP-SEC-004", "VP-PLUG-001", "VP-PLUG-002"}
+SEEDED_RULES = {
+    "VP-QUOTA-003",
+    "VP-QUOTA-004",
+    "VP-SEC-001",
+    "VP-SEC-002",
+    "VP-SEC-004",
+    "VP-PLUG-001",
+    "VP-PLUG-002",
+    *(f"VP-ROLE-00{i}" for i in range(1, 10)),
+    "VP-PKI-002",
+    "VP-PKI-003",
+    "VP-PKI-004",
+    "VP-PKI-005",
+    "VP-PKI-006",
+    "VP-PKI-008",
+}
+# Seeded controls that must stay quiet: (rule, object path).
+SEEDED_CONTROLS = [("VP-ROLE-006", "auth/kubernetes/role/scoped"), ("VP-ROLE-002", "auth/jwt/role/break-glass")]
 
 
 @pytest.fixture(scope="module")
@@ -32,7 +50,7 @@ def posture(live, tmp_path_factory):
 
 def test_token_is_the_readonly_policy(live):
     policies = live.auth.token.lookup_self()["data"]["policies"]
-    assert policies == ["vault-posture-readonly"], "run with the token from `task token`, not root"
+    assert policies == ["vault-posture-pki-reader", "vault-posture-readonly"], "run with the token from `task token`, not root"
 
 
 def test_coverage_is_complete_with_the_readonly_policy(posture):
@@ -46,6 +64,23 @@ def test_seeded_rules_fire(posture):
     assert ("VP-QUOTA-002" in fired) is enterprise
     status = {s["scope"]: s["status"] for s in posture["coverage"]["scopes"]}
     assert status["quotas.lease-count"] == ("absent" if enterprise else "unsupported")
+
+
+def test_seeded_controls_stay_quiet(posture):
+    fired = {(f["rule_id"], f["object"]["path"]) for f in posture["findings"]}
+    for control in SEEDED_CONTROLS:
+        assert control not in fired
+
+
+def test_seeded_role_and_pki_details(posture):
+    by_path = {(f["rule_id"], f["object"]["path"]) for f in posture["findings"]}
+    assert ("VP-ROLE-001", "auth/jwt/role/break-glass") in by_path
+    assert ("VP-ROLE-001", "auth/token/roles/ops-root") in by_path
+    assert ("VP-ROLE-005", "auth/kubernetes/role/any-pod") in by_path
+    assert ("VP-PKI-006", "pki_off/") in by_path
+    expiring = next(f for f in posture["findings"] if f["rule_id"] == "VP-PKI-002")
+    assert expiring["evidence"]["issuer_name"] == "critical"
+    assert "BEGIN CERTIFICATE" not in json.dumps(posture)
 
 
 def test_seeded_plugin_and_quota_details(posture):
@@ -74,3 +109,31 @@ def test_no_seal_operation_secrets_in_output(posture):
 def test_readonly_token_cannot_write(live, method, path, body):
     with pytest.raises(hvac_exc.Forbidden):
         getattr(live.adapter, method)(path, json=body)
+
+
+# --------------------------------------------------------------------------- access vs Vault
+
+
+@pytest.fixture(scope="module")
+def root_client(live):
+    client = hvac.Client(url=os.environ["VAULT_ADDR"], token=os.getenv("VAULT_DEV_ROOT_TOKEN", "root"))
+    if not client.is_authenticated():
+        pytest.skip("dev root token not available (VAULT_DEV_ROOT_TOKEN)")
+    return client
+
+
+def test_access_matches_vault_capabilities(root_client):
+    """The offline evaluator agrees with sys/capabilities for a token holding the fixture policies."""
+    from conftest import FIXTURE_POLICIES
+    from test_access import EXPECTED
+
+    names = []
+    for file in sorted(FIXTURE_POLICIES.iterdir()):
+        name = f"posture-fixture-{file.stem}"
+        root_client.sys.create_or_update_policy(name, file.read_text())
+        names.append(name)
+    token = root_client.auth.token.create(policies=names, no_default_policy=True, ttl="5m")["auth"]["client_token"]
+    rules, _, _ = vp.load_policies([str(FIXTURE_POLICIES)])
+    for path in EXPECTED:
+        vault_caps = sorted(root_client.adapter.post("/v1/sys/capabilities", json={"token": token, "path": path})["capabilities"])
+        assert vp.effective_capabilities(rules, path)["capabilities"] == vault_caps, path

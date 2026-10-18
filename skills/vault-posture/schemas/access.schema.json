@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nhsy/claude-demo/skills/vault-posture/schemas/access.schema.json",
+  "title": "vault-posture access (offline ACL evaluation) document",
+  "type": "object",
+  "required": [
+    "run",
+    "policies",
+    "queries"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "result": {
+      "type": "object",
+      "required": [
+        "capabilities",
+        "decision",
+        "matched_path",
+        "policies"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "decision": {
+          "enum": [
+            "allow",
+            "explicit_deny",
+            "implicit_deny"
+          ]
+        },
+        "matched_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "policies": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "properties": {
+    "run": {
+      "type": "object",
+      "required": [
+        "tool",
+        "tool_version",
+        "schema_version",
+        "generated_at",
+        "mode"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "tool": {
+          "const": "vault-posture"
+        },
+        "tool_version": {
+          "type": "string"
+        },
+        "schema_version": {
+          "type": "string"
+        },
+        "generated_at": {
+          "type": "string"
+        },
+        "mode": {
+          "const": "offline"
+        }
+      }
+    },
+    "policies": {
+      "type": "object",
+      "required": [
+        "loaded",
+        "rules",
+        "unparsed"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "loaded": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "rules": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unparsed": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "file",
+              "reason"
+            ]
+          }
+        }
+      }
+    },
+    "queries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "path",
+          "combined",
+          "per_policy"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "combined": {
+            "$ref": "#/$defs/result"
+          },
+          "per_policy": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "policy",
+                "capabilities",
+                "matched_path"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "policy": {
+                  "type": "string"
+                },
+                "capabilities": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "matched_path": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "capability": {
+            "type": "string"
+          },
+          "granted_by": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "combined_allows": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+}

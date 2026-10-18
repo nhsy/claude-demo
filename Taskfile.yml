@@ -1,5 +1,8 @@
 version: "3"
 
+# Every workflow in this repo runs through Task: dev servers, seeding, tokens, the skill
+# script, policies, lint, tests and evals. CI calls the same tasks. `task` lists them.
+
 dotenv: [".env"]
 
 vars:
@@ -18,13 +21,30 @@ tasks:
       - uv sync
       - uv run pre-commit install
 
+  # ---- dev servers: local `vault server -dev` (default) or containers
+
+  dev:up:
+    desc: Start a local `vault server -dev` on 127.0.0.1:${VAULT_DEV_PORT} (default 8250; no containers needed)
+    cmds:
+      - scripts/dev_up.sh
+
+  dev:down:
+    desc: Stop the local `vault server -dev` (in memory, so all state goes with it)
+    cmds:
+      - scripts/dev_down.sh
+
+  dev:logs:
+    desc: Tail the local dev server log
+    cmds:
+      - tail -f .tmp/vault-dev/vault.log
+
   up:
-    desc: Start the Community dev server on 127.0.0.1:${VAULT_CE_PORT} (default 8250)
+    desc: Start the Community dev server container on 127.0.0.1:${VAULT_CE_PORT} (default 8250)
     cmds:
       - ${CONTAINER_CLI:-docker} compose up -d --wait vault
 
   up:ent:
-    desc: Start the Enterprise dev server on 127.0.0.1:${VAULT_ENT_PORT} (default 8260; needs VAULT_LICENSE)
+    desc: Start the Enterprise dev server container on 127.0.0.1:${VAULT_ENT_PORT} (default 8260; needs VAULT_LICENSE)
     preconditions:
       - sh: test -n "${VAULT_LICENSE:-}"
         msg: "VAULT_LICENSE is empty in .env"
@@ -32,14 +52,16 @@ tasks:
       - ${CONTAINER_CLI:-docker} compose --profile ent up -d --wait vault-ent
 
   down:
-    desc: Stop and remove the dev servers (in memory, so all state goes with them)
+    desc: Stop and remove the dev server containers
     cmds:
       - ${CONTAINER_CLI:-docker} compose --profile '*' down
 
   logs:
-    desc: "Tail a dev server's log (SERVICE=vault-ent task logs for Enterprise)"
+    desc: "Tail a container's log (SERVICE=vault-ent task logs for Enterprise)"
     cmds:
       - ${CONTAINER_CLI:-docker} compose logs -f --tail 50 {{.SERVICE | default "vault"}}
+
+  # ---- dev server contents
 
   seed:
     desc: Seed config that trips every live-testable VP rule (dev root token)
@@ -47,21 +69,41 @@ tasks:
       - scripts/seed_findings.sh
 
   token:
-    desc: Write the vault-posture-readonly policy and mint a 1h token to .tmp/posture-token
+    desc: Write the read-only policies and mint a 1h token (base + PKI add-on) to .tmp/posture-token
     cmds:
       - scripts/posture_token.sh
 
-  skill:run:
-    desc: "Run the skill script with the read-only token: task skill:run -- <audit|quotas|security>"
+  token:base:
+    desc: Like token, but without the PKI add-on (PKI coverage is reported as denied)
     cmds:
-      - VAULT_TOKEN="$(cat .tmp/posture-token)" uv run --script {{.SKILL_SCRIPT}} {{.CLI_ARGS | default "--help"}}
+      - PKI_READER=0 scripts/posture_token.sh
+
+  # ---- the skill
+
+  skill:run:
+    desc: "Run the skill script with the read-only token: task skill:run -- <audit|quotas|security|roles|pki>"
+    cmds:
+      - VAULT_ADDR="${VAULT_ADDR:-http://127.0.0.1:8250}" VAULT_TOKEN="$(cat .tmp/posture-token)" uv run --script {{.SKILL_SCRIPT}} {{.CLI_ARGS | default "--help"}}
     preconditions:
       - sh: test -s .tmp/posture-token
         msg: "No read-only token; run: task token"
 
+  skill:access:
+    desc: "Offline policy evaluation, no Vault: task skill:access -- --policy <dir|file> --path <path> [--capability update]"
+    cmds:
+      - uv run --script {{.SKILL_SCRIPT}} access {{.CLI_ARGS | default "--help"}}
+
+  policies:
+    desc: Regenerate the read-only policy files from scripts/gen_policies.py
+    cmds:
+      - uv run python scripts/gen_policies.py
+
+  # ---- quality gates
+
   lint:
     desc: Run all pre-commit hooks (ruff, shellcheck, gitleaks, yaml/json)
     cmds:
+      # --files covers untracked files too (--all-files only sees tracked ones)
       - git ls-files -co --exclude-standard -z | xargs -0 uv run pre-commit run --files
 
   test:
@@ -72,15 +114,20 @@ tasks:
   test:integration:
     desc: Integration tests against the seeded dev server with the read-only token
     cmds:
-      - VAULT_TOKEN="$(cat .tmp/posture-token)" uv run pytest -q -m integration
+      - VAULT_ADDR="${VAULT_ADDR:-http://127.0.0.1:8250}" VAULT_TOKEN="$(cat .tmp/posture-token)" uv run pytest -q -m integration
     preconditions:
       - sh: test -s .tmp/posture-token
-        msg: "No read-only token; run: task up seed token"
+        msg: "No read-only token; run: task dev:up seed token"
 
   test:e2e:
-    desc: "Fresh dev server -> seed -> token -> unit + integration tests -> remove (ENT=1 for Enterprise)"
+    desc: "Fresh local `vault server -dev` -> seed -> token -> unit + integration tests -> stop"
     cmds:
       - scripts/e2e.sh
+
+  test:e2e:compose:
+    desc: "Like test:e2e, on a fresh container (ENT=1 for the Enterprise one)"
+    cmds:
+      - MODE=compose scripts/e2e.sh
 
   test:ci:
     desc: CI pipeline (lint + plugin manifests + unit tests with coverage)
@@ -90,6 +137,12 @@ tasks:
       - task: test
 
   plugin:validate:
-    desc: Validate the plugin and marketplace manifests (strict)
+    desc: Validate the plugin and marketplace manifests
     cmds:
-      - claude plugin validate --strict .
+      # Not --strict: the repo's own CLAUDE.md at the plugin root is a (harmless) warning.
+      - claude plugin validate .
+
+  eval:
+    desc: "Skill evals (claude plugin eval, offline cases, uses API credits): task eval -- [--runs 1] [--case <glob>]"
+    cmds:
+      - claude plugin eval . --tag offline --scaffold --trust-plugin --no-publish -j 4 {{.CLI_ARGS}}
