@@ -222,6 +222,8 @@ RULES: dict[str, Rule] = {
     "VP-AWS-002": Rule("high", "roles", "AWS EC2 role is not bound to an account or instance"),
     "VP-AWS-003": Rule("low", "roles", "AWS IAM role matches principals by name, not unique ID"),
     "VP-AWS-004": Rule("low", "roles", "AWS EC2 role allows instance migration"),
+    "VP-CERT-001": Rule("medium", "roles", "Cert auth role accepts any certificate its CA signed"),
+    "VP-CERT-002": Rule("medium", "roles", "Cert auth role matches names with a catch-all wildcard"),
     "VP-PKI-001": Rule("high", "pki", "PKI issuer certificate has expired"),
     "VP-PKI-002": Rule("medium", "pki", "PKI issuer certificate expires within the critical window"),
     "VP-PKI-003": Rule("low", "pki", "PKI issuer certificate expires within the warning window"),
@@ -767,6 +769,27 @@ def _any_account_arn(arn: str) -> bool:
     return arn == "*" or (len(parts) >= 6 and "*" in parts[4])
 
 
+# Cert role fields that restrict which certificates (from the role's CA) may log in.
+CERT_CONSTRAINTS = (
+    "allowed_names",
+    "allowed_common_names",
+    "allowed_dns_sans",
+    "allowed_email_sans",
+    "allowed_uri_sans",
+    "allowed_organizational_units",
+    "allowed_organizations",
+    "required_extensions",
+)
+# Name globs judged by VP-CERT-002 (allowed_names matches the CN or any SAN).
+CERT_NAME_GLOBS = ("allowed_names", "allowed_common_names", "allowed_dns_sans")
+
+
+def _catch_all_name(pattern: str) -> bool:
+    # "*", "*.*" and the like, or a wildcard over a bare TLD ("*.com"); "*.example.com" is fine.
+    p = pattern.strip()
+    return bool(p) and (set(p) <= {"*", "."} or re.fullmatch(r"\*\.[^.*]+\.?", p) is not None)
+
+
 def check_roles(data: RoleData) -> list[Finding]:
     found: list[Finding] = []
     for role in data.roles:
@@ -844,7 +867,38 @@ def check_roles(data: RoleData) -> list[Finding]:
 
         if role.source == "aws":
             found.extend(_check_aws_role(role))
+        if role.source == "cert":
+            found.extend(_check_cert_role(role))
     return found
+
+
+def _check_cert_role(role: AuthRole) -> list[Finding]:
+    c = role.config
+    if not any(as_list(c.get(f)) for f in CERT_CONSTRAINTS):
+        return [
+            _role_finding(
+                "VP-CERT-001",
+                role,
+                f"Cert role '{role.name}' sets no name, organization or extension constraint: any client certificate its trusted CA signed can log in.",
+                ocsp_enabled=c.get("ocsp_enabled"),
+            )
+        ]
+    # Vault ANDs the constraint fields and ORs the values within one, so a field holding a
+    # catch-all accepts every name, and the role is wide open only if no other field narrows it.
+    broad = {f: [str(p) for p in as_list(c.get(f)) if _catch_all_name(str(p))] for f in CERT_NAME_GLOBS}
+    broad = {f: pats for f, pats in broad.items() if pats}
+    narrowed = any(as_list(c.get(f)) and f not in broad for f in CERT_CONSTRAINTS)
+    if broad and not narrowed:
+        shown = ", ".join(f"{f}={p}" for f, pats in broad.items() for p in pats)
+        return [
+            _role_finding(
+                "VP-CERT-002",
+                role,
+                f"Cert role '{role.name}' matches names with a catch-all wildcard ({shown}): any certificate its trusted CA signed passes that check.",
+                broad_patterns=broad,
+            )
+        ]
+    return []
 
 
 def _check_aws_role(role: AuthRole) -> list[Finding]:
