@@ -34,8 +34,16 @@ def test_policy_only_grants_read_list_or_deny(policy):
 
 
 def all_reads():
-    """Every (namespace, path, is_list) the collectors issue, on an Enterprise-shaped tree three levels deep."""
+    """Every (namespace, path, is_list) the collectors issue, on an Enterprise-shaped tree three levels
+    deep, with auth and PKI mounts one to three path segments deep (MOUNT_DEPTH in gen_policies.py)."""
     routes = dict(COMMUNITY_ROUTES)
+    routes[("sys/auth", False)] = ok({**COMMUNITY_ROUTES[("sys/auth", False)]["data"], "k8s/prod/": {"type": "kubernetes", "config": {}}})
+    routes[("auth/k8s/prod/role", True)] = ok({"keys": ["web"]})
+    routes[("auth/k8s/prod/role/web", False)] = ok({"bound_service_account_names": ["web"]})
+    routes[("sys/mounts", False)] = ok({**COMMUNITY_ROUTES[("sys/mounts", False)]["data"], "pki/int/": {"type": "pki", "config": {}}})
+    for path in ("pki/int/config/auto-tidy", "pki/int/config/crl", "pki/int/config/urls", "pki/int/issuer/i"):
+        routes[(path, False)] = ok({})
+    routes[("pki/int/issuers", True)] = ok({"keys": ["i"]})
     routes[("sys/quotas/lease-count", True)] = ok({"keys": ["global"]})
     routes[("sys/quotas/lease-count/global", False)] = ok({"name": "global", "type": "lease-count", "path": "", "max_leases": 1000})
     routes[("sys/namespaces", True)] = ok({"keys": ["a/"]})
@@ -44,17 +52,19 @@ def all_reads():
     for ns, child in (("a", "b/"), ("a/b", "c/")):
         routes[(ns, "sys/namespaces", True)] = ok({"keys": [child]})
     for ns in ("a", "a/b", "a/b/c"):
-        routes[(ns, "sys/auth", False)] = mounts(approle="approle", aws="aws", token="ns_token")
+        routes[(ns, "sys/auth", False)] = mounts(approle="approle", aws="aws", token="ns_token", **{"apps/team/x": "approle"})
         routes[(ns, "auth/aws/role", True)] = ok({"keys": ["ec2"]})
         routes[(ns, "auth/aws/role/ec2", False)] = ok({"auth_type": "ec2", "bound_account_id": ["123456789012"]})
-        routes[(ns, "auth/approle/role", True)] = ok({"keys": ["svc"]})
-        routes[(ns, "auth/approle/role/svc", False)] = ok({"bind_secret_id": True})
+        for mount in ("approle", "apps/team/x"):
+            routes[(ns, f"auth/{mount}/role", True)] = ok({"keys": ["svc"]})
+            routes[(ns, f"auth/{mount}/role/svc", False)] = ok({"bind_secret_id": True})
         routes[(ns, "auth/token/roles", True)] = ok({"keys": ["t"]})
         routes[(ns, "auth/token/roles/t", False)] = ok({"allowed_policies": ["x"]})
-        routes[(ns, "sys/mounts", False)] = mounts(pki_int="pki")
-        for path in ("pki_int/config/auto-tidy", "pki_int/config/crl", "pki_int/config/urls", "pki_int/issuer/i"):
-            routes[(ns, path, False)] = ok({})
-        routes[(ns, "pki_int/issuers", True)] = ok({"keys": ["i"]})
+        routes[(ns, "sys/mounts", False)] = mounts(pki_int="pki", **{"pki/int": "pki", "ca/x/y": "pki"})
+        for mount in ("pki_int", "pki/int", "ca/x/y"):
+            for path in ("config/auto-tidy", "config/crl", "config/urls", "issuer/i"):
+                routes[(ns, f"{mount}/{path}", False)] = ok({})
+            routes[(ns, f"{mount}/issuers", True)] = ok({"keys": ["i"]})
     reader = FakeReader(routes)
     reader.get("auth/token/lookup-self")
     vp.collect_quotas(reader, vp.Coverage())
@@ -63,7 +73,10 @@ def all_reads():
     assert namespaces == ["", "a", "a/b", "a/b/c"]
     vp.collect_roles(reader, vp.Coverage(), namespaces)
     vp.collect_pki(reader, vp.Coverage(), namespaces)
-    return set(reader.calls)
+    calls = set(reader.calls)
+    deep = {("", "auth/k8s/prod/role/web", False), ("", "pki/int/issuer/i", False), ("a/b/c", "auth/apps/team/x/role/svc", False), ("a/b/c", "ca/x/y/issuers", True)}
+    assert deep <= calls, "the multi-segment mounts were not read"
+    return calls
 
 
 def acl_path(namespace, path, is_list):
@@ -100,6 +113,16 @@ def test_pki_reads_need_the_addon():
         "auth/approle/role/svc/secret-id/",
         "team-a/auth/approle/role/svc/role-id",
         "auth/aws/config/client",
+        "auth/k8s/prod/role/x/role-id",
+        "auth/apps/team/x/role/svc/secret-id",
+        "auth/apps/team/x/role/svc/secret-id/",
+        "team-a/auth/k8s/prod/role/x/role-id",
+        "a/b/c/d/e/auth/apps/team/x/role/svc/secret-id-accessor/lookup",
+        # A role named "role" on a shallower mount must not fall under a deeper mount's role grant.
+        "auth/approle/role/role/role-id",
+        "auth/approle/role/role/secret-id",
+        "team-a/auth/approle/role/role/role-id",
+        "team-a/auth/approle/role/role/secret-id",
         "secret/data/app",
         "sys/policies/acl/admin",
         "auth/token/create",

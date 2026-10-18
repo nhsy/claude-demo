@@ -7,7 +7,8 @@
 #   vault policy write vault-posture-readonly vault-posture-readonly.hcl
 #   vault token create -policy=vault-posture-readonly -no-default-policy -orphan -ttl=1h
 #
-# Namespace-local rules repeat for the root namespace and five nesting levels.
+# Namespace-local rules repeat for the root namespace and five nesting levels, and
+# mount-relative rules for mount paths of one to three segments (auth/k8s/prod/, pki/int/).
 
 # ---- root namespace (cluster-wide)
 
@@ -95,37 +96,109 @@ path "+/+/+/+/+/sys/auth" {
 path "auth/+/role/" {
   capabilities = ["list"]
 }
+path "auth/+/+/role/" {
+  capabilities = ["list"]
+}
+path "auth/+/+/+/role/" {
+  capabilities = ["list"]
+}
 path "+/auth/+/role/" {
+  capabilities = ["list"]
+}
+path "+/auth/+/+/role/" {
+  capabilities = ["list"]
+}
+path "+/auth/+/+/+/role/" {
   capabilities = ["list"]
 }
 path "+/+/auth/+/role/" {
   capabilities = ["list"]
 }
+path "+/+/auth/+/+/role/" {
+  capabilities = ["list"]
+}
+path "+/+/auth/+/+/+/role/" {
+  capabilities = ["list"]
+}
 path "+/+/+/auth/+/role/" {
+  capabilities = ["list"]
+}
+path "+/+/+/auth/+/+/role/" {
+  capabilities = ["list"]
+}
+path "+/+/+/auth/+/+/+/role/" {
   capabilities = ["list"]
 }
 path "+/+/+/+/auth/+/role/" {
   capabilities = ["list"]
 }
+path "+/+/+/+/auth/+/+/role/" {
+  capabilities = ["list"]
+}
+path "+/+/+/+/auth/+/+/+/role/" {
+  capabilities = ["list"]
+}
 path "+/+/+/+/+/auth/+/role/" {
+  capabilities = ["list"]
+}
+path "+/+/+/+/+/auth/+/+/role/" {
+  capabilities = ["list"]
+}
+path "+/+/+/+/+/auth/+/+/+/role/" {
   capabilities = ["list"]
 }
 path "auth/+/role/+" {
   capabilities = ["read"]
 }
+path "auth/+/+/role/+" {
+  capabilities = ["read"]
+}
+path "auth/+/+/+/role/+" {
+  capabilities = ["read"]
+}
 path "+/auth/+/role/+" {
+  capabilities = ["read"]
+}
+path "+/auth/+/+/role/+" {
+  capabilities = ["read"]
+}
+path "+/auth/+/+/+/role/+" {
   capabilities = ["read"]
 }
 path "+/+/auth/+/role/+" {
   capabilities = ["read"]
 }
+path "+/+/auth/+/+/role/+" {
+  capabilities = ["read"]
+}
+path "+/+/auth/+/+/+/role/+" {
+  capabilities = ["read"]
+}
 path "+/+/+/auth/+/role/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/auth/+/+/role/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/auth/+/+/+/role/+" {
   capabilities = ["read"]
 }
 path "+/+/+/+/auth/+/role/+" {
   capabilities = ["read"]
 }
+path "+/+/+/+/auth/+/+/role/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/auth/+/+/+/role/+" {
+  capabilities = ["read"]
+}
 path "+/+/+/+/+/auth/+/role/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/+/auth/+/+/role/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/+/auth/+/+/+/role/+" {
   capabilities = ["read"]
 }
 
@@ -189,12 +262,216 @@ path "sys/rekey/update" {
 path "auth/+/role/+/role-id" {
   capabilities = ["deny"]
 }
+path "auth/+/+/role/+/role-id" {
+  capabilities = ["deny"]
+}
+path "auth/+/+/+/role/+/role-id" {
+  capabilities = ["deny"]
+}
+path "+/auth/+/role/+/role-id" {
+  capabilities = ["deny"]
+}
+path "+/auth/+/+/role/+/role-id" {
+  capabilities = ["deny"]
+}
+path "+/auth/+/+/+/role/+/role-id" {
+  capabilities = ["deny"]
+}
+path "+/+/auth/+/role/+/role-id" {
+  capabilities = ["deny"]
+}
+path "+/+/auth/+/+/role/+/role-id" {
+  capabilities = ["deny"]
+}
+path "+/+/auth/+/+/+/role/+/role-id" {
+  capabilities = ["deny"]
+}
+path "+/+/+/auth/+/role/+/role-id" {
+  capabilities = ["deny"]
+}
+path "+/+/+/auth/+/+/role/+/role-id" {
+  capabilities = ["deny"]
+}
+path "+/+/+/auth/+/+/+/role/+/role-id" {
+  capabilities = ["deny"]
+}
+path "+/+/+/+/auth/+/role/+/role-id" {
+  capabilities = ["deny"]
+}
+path "+/+/+/+/auth/+/+/role/+/role-id" {
+  capabilities = ["deny"]
+}
+path "+/+/+/+/auth/+/+/+/role/+/role-id" {
+  capabilities = ["deny"]
+}
+path "+/+/+/+/+/auth/+/role/+/role-id" {
+  capabilities = ["deny"]
+}
+path "+/+/+/+/+/auth/+/+/role/+/role-id" {
+  capabilities = ["deny"]
+}
+path "+/+/+/+/+/auth/+/+/+/role/+/role-id" {
+  capabilities = ["deny"]
+}
 path "auth/+/role/+/secret-id" {
+  capabilities = ["deny"]
+}
+path "auth/+/+/role/+/secret-id" {
+  capabilities = ["deny"]
+}
+path "auth/+/+/+/role/+/secret-id" {
+  capabilities = ["deny"]
+}
+path "+/auth/+/role/+/secret-id" {
+  capabilities = ["deny"]
+}
+path "+/auth/+/+/role/+/secret-id" {
+  capabilities = ["deny"]
+}
+path "+/auth/+/+/+/role/+/secret-id" {
+  capabilities = ["deny"]
+}
+path "+/+/auth/+/role/+/secret-id" {
+  capabilities = ["deny"]
+}
+path "+/+/auth/+/+/role/+/secret-id" {
+  capabilities = ["deny"]
+}
+path "+/+/auth/+/+/+/role/+/secret-id" {
+  capabilities = ["deny"]
+}
+path "+/+/+/auth/+/role/+/secret-id" {
+  capabilities = ["deny"]
+}
+path "+/+/+/auth/+/+/role/+/secret-id" {
+  capabilities = ["deny"]
+}
+path "+/+/+/auth/+/+/+/role/+/secret-id" {
+  capabilities = ["deny"]
+}
+path "+/+/+/+/auth/+/role/+/secret-id" {
+  capabilities = ["deny"]
+}
+path "+/+/+/+/auth/+/+/role/+/secret-id" {
+  capabilities = ["deny"]
+}
+path "+/+/+/+/auth/+/+/+/role/+/secret-id" {
+  capabilities = ["deny"]
+}
+path "+/+/+/+/+/auth/+/role/+/secret-id" {
+  capabilities = ["deny"]
+}
+path "+/+/+/+/+/auth/+/+/role/+/secret-id" {
+  capabilities = ["deny"]
+}
+path "+/+/+/+/+/auth/+/+/+/role/+/secret-id" {
   capabilities = ["deny"]
 }
 path "auth/+/role/+/secret-id/*" {
   capabilities = ["deny"]
 }
+path "auth/+/+/role/+/secret-id/*" {
+  capabilities = ["deny"]
+}
+path "auth/+/+/+/role/+/secret-id/*" {
+  capabilities = ["deny"]
+}
+path "+/auth/+/role/+/secret-id/*" {
+  capabilities = ["deny"]
+}
+path "+/auth/+/+/role/+/secret-id/*" {
+  capabilities = ["deny"]
+}
+path "+/auth/+/+/+/role/+/secret-id/*" {
+  capabilities = ["deny"]
+}
+path "+/+/auth/+/role/+/secret-id/*" {
+  capabilities = ["deny"]
+}
+path "+/+/auth/+/+/role/+/secret-id/*" {
+  capabilities = ["deny"]
+}
+path "+/+/auth/+/+/+/role/+/secret-id/*" {
+  capabilities = ["deny"]
+}
+path "+/+/+/auth/+/role/+/secret-id/*" {
+  capabilities = ["deny"]
+}
+path "+/+/+/auth/+/+/role/+/secret-id/*" {
+  capabilities = ["deny"]
+}
+path "+/+/+/auth/+/+/+/role/+/secret-id/*" {
+  capabilities = ["deny"]
+}
+path "+/+/+/+/auth/+/role/+/secret-id/*" {
+  capabilities = ["deny"]
+}
+path "+/+/+/+/auth/+/+/role/+/secret-id/*" {
+  capabilities = ["deny"]
+}
+path "+/+/+/+/auth/+/+/+/role/+/secret-id/*" {
+  capabilities = ["deny"]
+}
+path "+/+/+/+/+/auth/+/role/+/secret-id/*" {
+  capabilities = ["deny"]
+}
+path "+/+/+/+/+/auth/+/+/role/+/secret-id/*" {
+  capabilities = ["deny"]
+}
+path "+/+/+/+/+/auth/+/+/+/role/+/secret-id/*" {
+  capabilities = ["deny"]
+}
 path "auth/+/role/+/secret-id-accessor/*" {
+  capabilities = ["deny"]
+}
+path "auth/+/+/role/+/secret-id-accessor/*" {
+  capabilities = ["deny"]
+}
+path "auth/+/+/+/role/+/secret-id-accessor/*" {
+  capabilities = ["deny"]
+}
+path "+/auth/+/role/+/secret-id-accessor/*" {
+  capabilities = ["deny"]
+}
+path "+/auth/+/+/role/+/secret-id-accessor/*" {
+  capabilities = ["deny"]
+}
+path "+/auth/+/+/+/role/+/secret-id-accessor/*" {
+  capabilities = ["deny"]
+}
+path "+/+/auth/+/role/+/secret-id-accessor/*" {
+  capabilities = ["deny"]
+}
+path "+/+/auth/+/+/role/+/secret-id-accessor/*" {
+  capabilities = ["deny"]
+}
+path "+/+/auth/+/+/+/role/+/secret-id-accessor/*" {
+  capabilities = ["deny"]
+}
+path "+/+/+/auth/+/role/+/secret-id-accessor/*" {
+  capabilities = ["deny"]
+}
+path "+/+/+/auth/+/+/role/+/secret-id-accessor/*" {
+  capabilities = ["deny"]
+}
+path "+/+/+/auth/+/+/+/role/+/secret-id-accessor/*" {
+  capabilities = ["deny"]
+}
+path "+/+/+/+/auth/+/role/+/secret-id-accessor/*" {
+  capabilities = ["deny"]
+}
+path "+/+/+/+/auth/+/+/role/+/secret-id-accessor/*" {
+  capabilities = ["deny"]
+}
+path "+/+/+/+/auth/+/+/+/role/+/secret-id-accessor/*" {
+  capabilities = ["deny"]
+}
+path "+/+/+/+/+/auth/+/role/+/secret-id-accessor/*" {
+  capabilities = ["deny"]
+}
+path "+/+/+/+/+/auth/+/+/role/+/secret-id-accessor/*" {
+  capabilities = ["deny"]
+}
+path "+/+/+/+/+/auth/+/+/+/role/+/secret-id-accessor/*" {
   capabilities = ["deny"]
 }

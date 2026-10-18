@@ -7,7 +7,8 @@
 #   vault policy write vault-posture-pki-reader vault-posture-pki-reader.hcl
 #   vault token create -policy=vault-posture-readonly -policy=vault-posture-pki-reader -no-default-policy -orphan -ttl=1h
 #
-# Namespace-local rules repeat for the root namespace and five nesting levels.
+# Namespace-local rules repeat for the root namespace and five nesting levels, and
+# mount-relative rules for mount paths of one to three segments (auth/k8s/prod/, pki/int/).
 
 # ---- every namespace level
 
@@ -50,6 +51,12 @@ path "+/+/+/+/+/issuers/" {
 path "+/+/+/+/+/+/issuers/" {
   capabilities = ["list"]
 }
+path "+/+/+/+/+/+/+/issuers/" {
+  capabilities = ["list"]
+}
+path "+/+/+/+/+/+/+/+/issuers/" {
+  capabilities = ["list"]
+}
 path "+/issuer/+" {
   capabilities = ["read"]
 }
@@ -66,6 +73,12 @@ path "+/+/+/+/+/issuer/+" {
   capabilities = ["read"]
 }
 path "+/+/+/+/+/+/issuer/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/+/+/+/issuer/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/+/+/+/+/issuer/+" {
   capabilities = ["read"]
 }
 
@@ -88,6 +101,12 @@ path "+/+/+/+/+/config/auto-tidy" {
 path "+/+/+/+/+/+/config/auto-tidy" {
   capabilities = ["read"]
 }
+path "+/+/+/+/+/+/+/config/auto-tidy" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/+/+/+/+/config/auto-tidy" {
+  capabilities = ["read"]
+}
 path "+/config/crl" {
   capabilities = ["read"]
 }
@@ -106,6 +125,12 @@ path "+/+/+/+/+/config/crl" {
 path "+/+/+/+/+/+/config/crl" {
   capabilities = ["read"]
 }
+path "+/+/+/+/+/+/+/config/crl" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/+/+/+/+/config/crl" {
+  capabilities = ["read"]
+}
 path "+/config/urls" {
   capabilities = ["read"]
 }
@@ -122,5 +147,11 @@ path "+/+/+/+/+/config/urls" {
   capabilities = ["read"]
 }
 path "+/+/+/+/+/+/config/urls" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/+/+/+/config/urls" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/+/+/+/+/config/urls" {
   capabilities = ["read"]
 }
