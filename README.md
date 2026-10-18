@@ -102,7 +102,7 @@ Labels, the definition of ready, and branch and commit conventions are in [CLAUD
 
 **One-time setup** (needs `gh` signed in with admin rights on the repo):
 
-1. `task github:setup`: creates the six `agent-*` labels and allows rebase merging only.
+1. `task github:setup`: creates the six `agent-*` labels with colours and descriptions (rerunning resets them) and allows rebase merging only.
 2. Protect `main` with a branch protection rule or ruleset that requires a review, passing checks and linear history (linear history rejects any PR containing a merge commit).
 3. In Claude Code: `/plugin install code-review@claude-plugins-official` and `/plugin install pr-review-toolkit@claude-plugins-official`.
 
