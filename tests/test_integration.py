@@ -23,6 +23,7 @@ SEEDED_RULES = {
     "VP-PLUG-001",
     "VP-PLUG-002",
     *(f"VP-ROLE-00{i}" for i in range(1, 10)),
+    *(f"VP-AWS-00{i}" for i in range(1, 5)),
     "VP-PKI-002",
     "VP-PKI-003",
     "VP-PKI-004",
@@ -31,7 +32,12 @@ SEEDED_RULES = {
     "VP-PKI-008",
 }
 # Seeded controls that must stay quiet: (rule, object path).
-SEEDED_CONTROLS = [("VP-ROLE-006", "auth/kubernetes/role/scoped"), ("VP-ROLE-002", "auth/jwt/role/break-glass")]
+SEEDED_CONTROLS = [
+    ("VP-ROLE-006", "auth/kubernetes/role/scoped"),
+    ("VP-ROLE-002", "auth/jwt/role/break-glass"),
+    ("VP-AWS-001", "auth/aws/role/scoped"),
+    ("VP-AWS-002", "auth/aws/role/ec2-migrating"),
+]
 
 
 @pytest.fixture(scope="module")
@@ -77,6 +83,10 @@ def test_seeded_role_and_pki_details(posture):
     assert ("VP-ROLE-001", "auth/jwt/role/break-glass") in by_path
     assert ("VP-ROLE-001", "auth/token/roles/ops-root") in by_path
     assert ("VP-ROLE-005", "auth/kubernetes/role/any-pod") in by_path
+    assert ("VP-AWS-001", "auth/aws/role/any-principal") in by_path
+    assert ("VP-AWS-002", "auth/aws/role/ec2-region-only") in by_path
+    assert ("VP-AWS-003", "auth/aws/role/scoped") in by_path
+    assert ("VP-AWS-004", "auth/aws/role/ec2-migrating") in by_path
     assert ("VP-PKI-006", "pki_off/") in by_path
     expiring = next(f for f in posture["findings"] if f["rule_id"] == "VP-PKI-002")
     assert expiring["evidence"]["issuer_name"] == "critical"
