@@ -147,6 +147,22 @@ ROLE_SOURCES: dict[str, tuple[str, tuple[str, ...]]] = {
             *TOKEN_PARAM_FIELDS,
         ),
     ),
+    # The role's trusted CA (`certificate`) is never kept.
+    "cert": (
+        "certs",
+        (
+            "allowed_names",
+            "allowed_common_names",
+            "allowed_dns_sans",
+            "allowed_email_sans",
+            "allowed_uri_sans",
+            "allowed_organizational_units",
+            "allowed_organizations",
+            "required_extensions",
+            "ocsp_enabled",
+            *TOKEN_PARAM_FIELDS,
+        ),
+    ),
     "approle": ("role", ("bind_secret_id", "secret_id_bound_cidrs", "secret_id_num_uses", "secret_id_ttl", "local_secret_ids", *TOKEN_PARAM_FIELDS)),
     "token": (
         "roles",

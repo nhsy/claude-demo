@@ -65,6 +65,8 @@ NAMESPACE_RULES = [
     ("Auth mounts and roles: JWT/OIDC, Kubernetes, AppRole (role/<name> only: never role-id or secret-id)", "sys/auth", ["read"]),
     (None, "auth/{m}role/", ["list"]),
     (None, "auth/{m}role/+", ["read"]),
+    ("Cert auth roles (certs/<name>; the script drops the trusted CA certificate)", "auth/{m}certs/", ["list"]),
+    (None, "auth/{m}certs/+", ["read"]),
     ("Token roles", "auth/token/roles/", ["list"]),
     (None, "auth/token/roles/+", ["read"]),
 ]

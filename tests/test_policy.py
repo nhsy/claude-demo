@@ -52,7 +52,9 @@ def all_reads():
     for ns, child in (("a", "b/"), ("a/b", "c/")):
         routes[(ns, "sys/namespaces", True)] = ok({"keys": [child]})
     for ns in ("a", "a/b", "a/b/c"):
-        routes[(ns, "sys/auth", False)] = mounts(approle="approle", aws="aws", token="ns_token", **{"apps/team/x": "approle"})
+        routes[(ns, "sys/auth", False)] = mounts(approle="approle", aws="aws", token="ns_token", **{"apps/team/x": "approle", "cert/x": "cert"})
+        routes[(ns, "auth/cert/x/certs", True)] = ok({"keys": ["web"]})
+        routes[(ns, "auth/cert/x/certs/web", False)] = ok({"allowed_common_names": ["web.example.com"]})
         routes[(ns, "auth/aws/role", True)] = ok({"keys": ["ec2"]})
         routes[(ns, "auth/aws/role/ec2", False)] = ok({"auth_type": "ec2", "bound_account_id": ["123456789012"]})
         for mount in ("approle", "apps/team/x"):
@@ -74,7 +76,13 @@ def all_reads():
     vp.collect_roles(reader, vp.Coverage(), namespaces)
     vp.collect_pki(reader, vp.Coverage(), namespaces)
     calls = set(reader.calls)
-    deep = {("", "auth/k8s/prod/role/web", False), ("", "pki/int/issuer/i", False), ("a/b/c", "auth/apps/team/x/role/svc", False), ("a/b/c", "ca/x/y/issuers", True)}
+    deep = {
+        ("", "auth/k8s/prod/role/web", False),
+        ("", "pki/int/issuer/i", False),
+        ("a/b/c", "auth/apps/team/x/role/svc", False),
+        ("a/b/c", "ca/x/y/issuers", True),
+        ("a/b", "auth/cert/x/certs/web", False),
+    }
     assert deep <= calls, "the multi-segment mounts were not read"
     return calls
 
@@ -123,6 +131,10 @@ def test_pki_reads_need_the_addon():
         "auth/approle/role/role/secret-id",
         "team-a/auth/approle/role/role/role-id",
         "team-a/auth/approle/role/role/secret-id",
+        # Nor an AppRole role named "certs" under a deeper mount's cert grant (auth/+/+/certs/+).
+        "auth/approle/role/certs/role-id",
+        "auth/approle/role/certs/secret-id",
+        "team-a/auth/approle/role/certs/secret-id",
         "secret/data/app",
         "sys/policies/acl/admin",
         "auth/token/create",

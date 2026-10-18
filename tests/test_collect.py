@@ -182,6 +182,18 @@ def test_collect_roles_reads_aws_roles():
     assert data.roles[0].config == {"auth_type": "iam", "bound_iam_principal_arn": ["arn:aws:iam::*:role/*"], "resolve_aws_unique_ids": False}
 
 
+def test_collect_roles_reads_cert_roles_without_the_ca():
+    body = {"certificate": "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n", "allowed_common_names": ["*"], "display_name": "web", "ocsp_enabled": False}
+    routes = {
+        ("sys/auth", False): mounts(cert="cert"),
+        ("auth/cert/certs", True): ok({"keys": ["web"]}),
+        ("auth/cert/certs/web", False): ok(body),
+    }
+    data = vp.collect_roles(FakeReader(routes), vp.Coverage(), [""])
+    assert [(r.source, r.path) for r in data.roles] == [("cert", "auth/cert/certs/web")]
+    assert data.roles[0].config == {"allowed_common_names": ["*"], "ocsp_enabled": False}
+
+
 def test_collect_roles_denied_role_body_is_a_gap():
     routes = dict(COMMUNITY_ROUTES)
     routes[("auth/jwt/role/ci", False)] = hvac_exc.Forbidden()
