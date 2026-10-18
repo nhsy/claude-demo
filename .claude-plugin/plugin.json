@@ -1,0 +1,11 @@
+{
+  "name": "vault-posture",
+  "version": "0.1.0",
+  "description": "Read-only HashiCorp Vault security posture review: quotas, root-token generation and rekey in progress, barrier key age and rotation, external plugins. Never changes Vault.",
+  "author": {
+    "name": "nhsy"
+  },
+  "homepage": "https://github.com/nhsy/claude-demo",
+  "repository": "https://github.com/nhsy/claude-demo",
+  "keywords": ["hashicorp", "vault", "security", "posture", "read-only"]
+}

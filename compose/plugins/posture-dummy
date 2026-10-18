@@ -1,0 +1,4 @@
+#!/bin/sh
+# Not a real plugin: `task seed` registers it (without a version) so the plugin catalogue
+# holds an external entry for VP-PLUG-001/002. It is never mounted or run.
+exit 1

@@ -1,0 +1,95 @@
+name: ci
+
+# Same gate as `task test:ci`, split into jobs. No Vault, licence, token or secrets needed;
+# integration tests stay local (`task test:e2e`) plus the live-vault job below.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          version: "0.12.23"
+          enable-cache: true
+
+      - uses: arduino/setup-task@v3.0.0
+        with:
+          version: "3.54.0"
+
+      - name: Cache pre-commit hooks
+        uses: actions/cache@v6.1.0
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: task lint
+        run: task lint
+
+  test:
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          version: "0.12.23"
+          enable-cache: true
+
+      - uses: arduino/setup-task@v3.0.0
+        with:
+          version: "3.54.0"
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: task test
+        run: task test
+
+  # Community dev server from compose.yaml: seed, mint the read-only token, run the integration tests.
+  integration:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          version: "0.12.23"
+          enable-cache: true
+
+      - uses: arduino/setup-task@v3.0.0
+        with:
+          version: "3.54.0"
+
+      - name: Install Vault CLI
+        run: |
+          curl -fsSL -o vault.zip https://releases.hashicorp.com/vault/2.1.1/vault_2.1.1_linux_amd64.zip
+          unzip -q vault.zip vault && sudo mv vault /usr/local/bin/ && vault version
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: task test:e2e
+        run: task test:e2e

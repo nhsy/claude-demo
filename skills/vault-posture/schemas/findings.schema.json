@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nhsy/claude-demo/skills/vault-posture/schemas/findings.schema.json",
+  "title": "vault-posture result document",
+  "type": "object",
+  "required": ["run", "coverage", "summary", "findings", "data"],
+  "additionalProperties": false,
+  "properties": {
+    "run": {
+      "type": "object",
+      "required": ["tool", "tool_version", "schema_version", "generated_at", "cluster_name", "vault_addr", "vault_version", "edition"],
+      "additionalProperties": false,
+      "properties": {
+        "tool": {"const": "vault-posture"},
+        "tool_version": {"type": "string"},
+        "schema_version": {"type": "string"},
+        "generated_at": {"type": "string", "format": "date-time"},
+        "cluster_name": {"type": "string"},
+        "vault_addr": {"type": "string"},
+        "vault_version": {"type": "string"},
+        "edition": {"enum": ["community", "enterprise"]}
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "required": ["complete", "scopes"],
+      "additionalProperties": false,
+      "properties": {
+        "complete": {"type": "boolean"},
+        "scopes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["scope", "status"],
+            "additionalProperties": false,
+            "properties": {
+              "scope": {"type": "string"},
+              "status": {"enum": ["ok", "absent", "denied", "unsupported", "not_applicable", "error"]},
+              "detail": {"type": "string"}
+            }
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["total", "by_severity", "by_rule"],
+      "additionalProperties": false,
+      "properties": {
+        "total": {"type": "integer", "minimum": 0},
+        "by_severity": {
+          "type": "object",
+          "required": ["high", "medium", "low", "info"],
+          "additionalProperties": {"type": "integer", "minimum": 0}
+        },
+        "by_rule": {
+          "type": "object",
+          "propertyNames": {"pattern": "^VP-[A-Z]+-[0-9]{3}$"},
+          "additionalProperties": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["fingerprint", "rule_id", "severity", "category", "title", "object", "detail", "evidence"],
+        "additionalProperties": false,
+        "properties": {
+          "fingerprint": {"type": "string", "pattern": "^[0-9a-f]{16}$"},
+          "rule_id": {"type": "string", "pattern": "^VP-[A-Z]+-[0-9]{3}$"},
+          "severity": {"enum": ["high", "medium", "low", "info"]},
+          "category": {"enum": ["quotas", "security", "plugins"]},
+          "title": {"type": "string"},
+          "object": {
+            "type": "object",
+            "required": ["kind", "path"],
+            "additionalProperties": false,
+            "properties": {
+              "kind": {"type": "string"},
+              "path": {"type": ["string", "null"]}
+            }
+          },
+          "detail": {"type": "string"},
+          "evidence": {"type": "object"}
+        }
+      }
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "quotas": {"type": "object"},
+        "security": {"type": "object"}
+      }
+    }
+  }
+}
