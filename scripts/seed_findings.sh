@@ -8,6 +8,7 @@
 #   VP-ROLE-001..009  JWT, Kubernetes, AppRole and token roles with loose bindings
 #   VP-AWS-001..004   AWS IAM and EC2 roles (written without AWS credentials: no unique-ID lookups)
 #   VP-GCP-001..004   GCP IAM and GCE roles (written without GCP credentials: Vault checks none at write)
+#   VP-AZURE-001..003 Azure roles (written without auth/azure/config: Vault checks no Azure resource at write)
 #   VP-CERT-001/002   TLS certificate roles with no constraint and a catch-all CN (throwaway CA)
 #   VP-PKI-002..006/008  short-lived issuers, no AIA URLs, auto-tidy off, CRL+OCSP off, leaf_not_after=permit
 # auth/k8s/prod/ and ca/int/ (two-segment mounts) show the policies reach deeper mount paths.
@@ -51,6 +52,7 @@ enable_auth kubernetes
 enable_auth approle
 enable_auth aws
 enable_auth gcp
+enable_auth azure
 enable_auth cert
 enable_auth kubernetes k8s/prod
 # A throwaway validation key: the JWT roles are never logged into.
@@ -79,6 +81,12 @@ write auth/gcp/role/project-wide type=iam bound_service_accounts='*' bound_proje
 write auth/gcp/role/long-jwt type=iam bound_service_accounts=ci@acme-prod.iam.gserviceaccount.com bound_projects=acme-prod max_jwt_exp=1h token_policies=app
 write auth/gcp/role/gce-zone-only type=gce bound_zones=us-central1-a token_policies=app
 write auth/gcp/role/gce-pinned type=gce bound_projects=acme-prod bound_zones=us-central1-a token_policies=app
+write auth/azure/role/any-sp bound_service_principal_ids='*' token_policies=app
+write auth/azure/role/any-sp-eastus bound_service_principal_ids='*' bound_locations=eastus token_policies=app
+write auth/azure/role/loc-only bound_locations=eastus token_policies=app
+write auth/azure/role/rg-any-group bound_group_ids='*' bound_resource_groups=app-rg token_policies=app
+write auth/azure/role/sub-scoped bound_service_principal_ids='*' bound_subscription_ids=00000000-0000-0000-0000-000000000001 token_policies=app
+write auth/azure/role/pinned bound_service_principal_ids=00000000-0000-0000-0000-0000000000aa bound_resource_groups=app-rg token_policies=app
 # A throwaway self-signed CA (its key is discarded): the cert roles are never logged into.
 ca="$(openssl req -x509 -newkey rsa:2048 -nodes -keyout /dev/null -subj '/CN=posture client CA' -days 30 2>/dev/null)"
 write auth/cert/certs/any-cert certificate="$ca" token_policies=app

@@ -197,6 +197,76 @@ def test_gcp_roles_still_get_token_param_rules():
     assert ids([role("gcp", config)]) == ["VP-ROLE-001", "VP-ROLE-009"]
 
 
+OID = "00000000-0000-0000-0000-0000000000aa"
+SUB = "00000000-0000-0000-0000-000000000001"
+
+
+@pytest.mark.parametrize(
+    ("config", "expected"),
+    [
+        ({"bound_service_principal_ids": ["*"]}, ["VP-AZURE-001"]),
+        ({"bound_group_ids": ["*"], "bound_service_principal_ids": None}, ["VP-AZURE-001"]),
+        ({"bound_service_principal_ids": ["*"], "bound_locations": ["eastus"]}, ["VP-AZURE-001"]),  # location doesn't narrow
+        ({"bound_service_principal_ids": ["*"], "bound_subscription_ids": [SUB]}, []),
+        ({"bound_service_principal_ids": ["*"], "bound_scale_sets": ["web"], "bound_subscription_ids": [SUB]}, []),
+        ({"bound_service_principal_ids": ["*"], "bound_group_ids": [OID]}, []),  # the group narrows
+        ({"bound_service_principal_ids": ["*", OID]}, []),  # "*" beside an ID is matched literally
+        ({"bound_service_principal_ids": [OID]}, []),
+    ],
+)
+def test_azure_wildcard_identity_fires_001(config, expected):
+    assert ids([role("azure", config)]) == expected
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        {"bound_locations": ["eastus"]},
+        {"bound_resource_groups": ["app-rg"], "bound_subscription_ids": [SUB]},
+        {"bound_service_principal_ids": ["*"], "bound_group_ids": ["*"]},
+        {"bound_service_principal_ids": [], "bound_group_ids": None, "bound_scale_sets": ["web"]},  # 002 alone, not 003
+    ],
+)
+def test_azure_role_without_identity_fires_002(config):
+    assert ids([role("azure", config)]) == ["VP-AZURE-002"]
+
+
+@pytest.mark.parametrize(
+    ("config", "expected"),
+    [
+        ({"bound_group_ids": ["*"], "bound_resource_groups": ["app-rg"]}, ["VP-AZURE-003"]),
+        ({"bound_group_ids": [OID], "bound_scale_sets": ["web"]}, ["VP-AZURE-003"]),  # a group can hold many identities
+        ({"bound_group_ids": [OID], "bound_resource_groups": ["app-rg"], "bound_subscription_ids": [SUB]}, []),
+        ({"bound_service_principal_ids": [OID], "bound_resource_groups": ["app-rg"]}, []),  # the SP pins the identity
+        ({"bound_group_ids": [OID]}, []),
+    ],
+)
+def test_azure_resource_group_without_subscription_fires_003(config, expected):
+    assert ids([role("azure", config)]) == expected
+
+
+def test_azure_evidence_and_path():
+    wide = role("azure", {"bound_group_ids": ["*"], "bound_locations": ["eastus"]}, name="vm")
+    dead = role("azure", {"bound_locations": ["westus"]}, name="old")
+    rg = role("azure", {"bound_group_ids": [OID], "bound_resource_groups": ["app-rg"]}, name="rg")
+    a, b, c = (vp.check_roles(vp.RoleData(roles=[r]))[0] for r in (wide, dead, rg))
+    assert (a.rule_id, a.evidence["wildcard_field"], a.evidence["bound_locations"], a.object_path, a.object_kind) == (
+        "VP-AZURE-001",
+        "bound_group_ids",
+        ["eastus"],
+        "auth/azure/role/vm",
+        "azure_role",
+    )
+    assert "in eastus" in a.detail
+    assert (b.rule_id, b.evidence["bound_locations"], b.evidence["bound_subscription_ids"]) == ("VP-AZURE-002", ["westus"], [])
+    assert (c.rule_id, c.evidence["bound_resource_groups"], c.evidence["bound_group_ids"]) == ("VP-AZURE-003", ["app-rg"], [OID])
+
+
+def test_azure_roles_still_get_token_param_rules():
+    config = {"bound_service_principal_ids": [OID], "token_policies": ["root"], "token_period": 3600}
+    assert ids([role("azure", config)]) == ["VP-ROLE-001", "VP-ROLE-009"]
+
+
 @pytest.mark.parametrize(
     ("config", "expected"),
     [
