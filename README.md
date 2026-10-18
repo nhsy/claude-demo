@@ -87,10 +87,35 @@ All are in-memory dev servers with root token `root`. `task seed` (`scripts/seed
 
 `.github/workflows/ci.yml` runs `task lint`, `task plugin:validate`, `task test`, then `task test:e2e` against a local `vault server -dev`.
 
+## Issue pipeline (`/issue-sdlc`)
+
+Claude Code works labelled GitHub issues through the SDLC from your terminal: refine and plan, build, test, self-review, open a draft PR, and fix review feedback. People keep two gates: approving the plan and merging the PR. The project skill [`.claude/skills/issue-sdlc`](.claude/skills/issue-sdlc/SKILL.md) finds the next item in GitHub, runs one stage and stops. Nothing runs on its own: you start every run by typing `/issue-sdlc` (or `/issue-sdlc 42` for one item). There are no GitHub Actions and no CI-hosted agent.
+
+```
+agent-ready ─▶ /issue-sdlc plans ─▶ agent-plan-review ─▶ (you approve) agent-build
+            ─▶ /issue-sdlc builds ─▶ draft PR, agent-review ─▶ (you review: request changes ⟲ /issue-sdlc fixes)
+            ─▶ (you) Rebase and merge, which closes the issue
+any stage ─▶ agent-blocked (question or failed run) ─▶ answer, then re-add agent-ready
+```
+
+Labels, the definition of ready, and branch and commit conventions are in [CLAUDE.md](CLAUDE.md). New work uses the **Agent task** issue form; `/issue-sdlc` fills in the PR template.
+
+**One-time setup** (needs `gh` signed in with admin rights on the repo):
+
+1. `task github:setup`: creates the six `agent-*` labels and allows rebase merging only.
+2. Protect `main` with a branch protection rule or ruleset that requires a review, passing checks and linear history (linear history rejects any PR containing a merge commit).
+3. In Claude Code: `/plugin install code-review@claude-plugins-official` and `/plugin install pr-review-toolkit@claude-plugins-official`.
+
+`.claude/settings.json` lets the skill run routine `gh`, `git` and `task` commands without prompting, and denies merging PRs, closing issues, merge commits and pushes or force-pushes to `main`.
+
+**Review and merge:** for a second opinion, open a fresh Claude Code session on the PR branch and run `/pr-review-toolkit:review-pr` or `/code-review`. To ask for changes, submit a GitHub review with "Request changes"; the next `/issue-sdlc` run picks the PR up first. When you're satisfied, mark the PR ready, approve it and use **Rebase and merge**. If a session dies mid-stage, remove `agent-working` from the issue by hand.
+
 ## Layout
 
 ```
 .claude-plugin/        plugin and marketplace manifests
+.claude/               project skill issue-sdlc and shared permission rules
+.github/               CI workflow, Agent task issue form, PR template
 skills/vault-posture/  the skill: SKILL.md, script, rules, schemas, policies
 scripts/               dev server, seed, token, e2e and policy-generator scripts (run via Task)
 compose.yaml compose/  container dev servers

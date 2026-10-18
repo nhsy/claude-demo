@@ -28,6 +28,34 @@ Before pushing: `task lint` and `task test`, and `task test:e2e` when you touche
 
 - Only commit to branches; never commit or push to `main` directly. Changes reach `main` through a pull request.
 - Anything that lands on `main` needs the user's explicit confirmation first: merging a PR (any merge method), pushing to it, or rebasing it. CI passing is not confirmation; ask, then merge.
+- PRs are merged with **Rebase and merge**, so every commit lands on `main` as written. Keep history linear: no `git merge`, use `git pull --rebase` and `git rebase origin/main`. Each commit is self-contained and passes `task lint && task test`; no WIP or fixup commits.
+- Branch names: `agent/issue-<N>` for issue-pipeline work, `agent/<short-topic>` otherwise.
+- Commit messages: an imperative subject of at most 72 characters (optionally `area: ` first, e.g. `evals: …`, `SKILL.md: …`), a blank line, then a body saying what changed and why, wrapped at about 72 columns. Put `Closes #N` in the body when the commit finishes an issue.
+
+## Issue pipeline (`/issue-sdlc`)
+
+GitHub issues move through `agent-*` labels; the project skill `.claude/skills/issue-sdlc` runs one stage per invocation and then stops. Nothing runs on its own: a label only records the stage, and a person starts every run by typing `/issue-sdlc` (or `/issue-sdlc <N>`).
+
+| Label | Meaning | Set by |
+| --- | --- | --- |
+| `agent-ready` | Meets the definition of ready; `/issue-sdlc` will plan it | a person |
+| `agent-working` | A Claude Code session holds the issue | Claude Code |
+| `agent-plan-review` | Implementation plan posted as a comment; waiting for a person | Claude Code |
+| `agent-build` | Plan approved; `/issue-sdlc` will build it | a person |
+| `agent-review` | Draft PR open; waiting for review | Claude Code |
+| `agent-blocked` | Claude asked a question, or a run stopped | Claude Code |
+
+The two human gates are approving the plan (`agent-plan-review` → `agent-build`) and merging the PR. `ready` and `in-progress` stay human-owned labels, so the two pipelines never trigger each other. New pipeline issues use the "Agent task" issue form (`.github/ISSUE_TEMPLATE/agent-task.yml`); PRs fill in `.github/pull_request_template.md`.
+
+### Definition of ready
+
+Only add `agent-ready` when an issue has all of these; vague issues end in `agent-blocked`:
+
+- A one-line summary of the change and why it's needed
+- Acceptance criteria written as testable statements
+- Scope limits: what is out of scope, and which files or modules to leave alone
+- Links to related issues, designs or logs
+- A size small enough for one PR; split anything larger first
 
 ## Layout
 

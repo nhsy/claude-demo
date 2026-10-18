@@ -136,6 +136,18 @@ tasks:
       - task: plugin:validate
       - task: test
 
+  github:setup:
+    desc: "One-time repo setup for the /issue-sdlc pipeline: agent-* labels, rebase-only merging (needs gh with admin rights)"
+    vars:
+      LABELS: agent-ready agent-working agent-plan-review agent-build agent-review agent-blocked
+    preconditions:
+      - sh: gh auth status
+        msg: "gh is not signed in; run: gh auth login"
+    cmds:
+      - for: { var: LABELS }
+        cmd: gh label create {{.ITEM}} --force
+      - gh repo edit --enable-rebase-merge --enable-squash-merge=false --enable-merge-commit=false
+
   plugin:validate:
     desc: Validate the plugin and marketplace manifests
     cmds:
