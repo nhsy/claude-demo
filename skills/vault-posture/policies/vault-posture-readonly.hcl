@@ -202,6 +202,116 @@ path "+/+/+/+/+/auth/+/+/+/role/+" {
   capabilities = ["read"]
 }
 
+# Cert auth roles (certs/<name>; the script drops the trusted CA certificate)
+path "auth/+/certs/" {
+  capabilities = ["list"]
+}
+path "auth/+/+/certs/" {
+  capabilities = ["list"]
+}
+path "auth/+/+/+/certs/" {
+  capabilities = ["list"]
+}
+path "+/auth/+/certs/" {
+  capabilities = ["list"]
+}
+path "+/auth/+/+/certs/" {
+  capabilities = ["list"]
+}
+path "+/auth/+/+/+/certs/" {
+  capabilities = ["list"]
+}
+path "+/+/auth/+/certs/" {
+  capabilities = ["list"]
+}
+path "+/+/auth/+/+/certs/" {
+  capabilities = ["list"]
+}
+path "+/+/auth/+/+/+/certs/" {
+  capabilities = ["list"]
+}
+path "+/+/+/auth/+/certs/" {
+  capabilities = ["list"]
+}
+path "+/+/+/auth/+/+/certs/" {
+  capabilities = ["list"]
+}
+path "+/+/+/auth/+/+/+/certs/" {
+  capabilities = ["list"]
+}
+path "+/+/+/+/auth/+/certs/" {
+  capabilities = ["list"]
+}
+path "+/+/+/+/auth/+/+/certs/" {
+  capabilities = ["list"]
+}
+path "+/+/+/+/auth/+/+/+/certs/" {
+  capabilities = ["list"]
+}
+path "+/+/+/+/+/auth/+/certs/" {
+  capabilities = ["list"]
+}
+path "+/+/+/+/+/auth/+/+/certs/" {
+  capabilities = ["list"]
+}
+path "+/+/+/+/+/auth/+/+/+/certs/" {
+  capabilities = ["list"]
+}
+path "auth/+/certs/+" {
+  capabilities = ["read"]
+}
+path "auth/+/+/certs/+" {
+  capabilities = ["read"]
+}
+path "auth/+/+/+/certs/+" {
+  capabilities = ["read"]
+}
+path "+/auth/+/certs/+" {
+  capabilities = ["read"]
+}
+path "+/auth/+/+/certs/+" {
+  capabilities = ["read"]
+}
+path "+/auth/+/+/+/certs/+" {
+  capabilities = ["read"]
+}
+path "+/+/auth/+/certs/+" {
+  capabilities = ["read"]
+}
+path "+/+/auth/+/+/certs/+" {
+  capabilities = ["read"]
+}
+path "+/+/auth/+/+/+/certs/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/auth/+/certs/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/auth/+/+/certs/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/auth/+/+/+/certs/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/auth/+/certs/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/auth/+/+/certs/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/auth/+/+/+/certs/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/+/auth/+/certs/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/+/auth/+/+/certs/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/+/auth/+/+/+/certs/+" {
+  capabilities = ["read"]
+}
+
 # Token roles
 path "auth/token/roles/" {
   capabilities = ["list"]
