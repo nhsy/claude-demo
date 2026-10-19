@@ -32,6 +32,11 @@ def access_schema():
     return json.loads((SCHEMA_DIR / "access.schema.json").read_text())
 
 
+@pytest.fixture
+def diff_schema():
+    return json.loads((SCHEMA_DIR / "diff.schema.json").read_text())
+
+
 def not_found(message=""):
     return hvac_exc.InvalidPath(message or None, errors=[message] if message else [])
 
