@@ -15,6 +15,8 @@ nothing here writes to Vault.
             OCSP/AIA, auto-tidy, per namespace (needs the vault-posture-pki-reader add-on)
   access    offline: effective capabilities of ACL  -> access-{ts}.json
             policy files on a path (no Vault access)
+  diff      offline: compare two findings documents -> {cluster}-diff-{ts}.json
+            by fingerprint (no Vault access)
 
 Complements the vault-ops skill (health, inventory, policies, usage): rule IDs are VP-*.
 """
@@ -1446,6 +1448,82 @@ def access_document(rules: list[AclRule], loaded: list[str], unparsed: list[dict
     }
 
 
+# --------------------------------------------------------------------------- diff
+
+DIFF_RUN_KEYS = ("cluster_name", "start_namespace", "edition")
+
+
+def load_findings_document(source: str) -> dict[str, Any]:
+    try:
+        document = json.loads(Path(source).expanduser().read_text())
+    except FileNotFoundError:
+        raise SystemExit(f"error: file not found: {source}") from None
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"error: {source} is not a JSON file: {exc}") from None
+    if not (
+        isinstance(document, dict)
+        and isinstance(document.get("run"), dict)
+        and isinstance(document.get("findings"), list)
+        and all(isinstance(f, dict) and "fingerprint" in f and "rule_id" in f for f in document["findings"])
+    ):
+        raise SystemExit(f"error: {source} is not a vault-posture findings document (audit, roles, pki, quotas or security)")
+    return document
+
+
+def count_findings(findings: list[dict[str, Any]]) -> dict[str, Any]:
+    by_severity = Counter(f.get("severity") for f in findings)
+    return {
+        "total": len(findings),
+        "by_severity": {s: by_severity.get(s, 0) for s in SEVERITIES},
+        "by_rule": dict(sorted(Counter(f["rule_id"] for f in findings).items())),
+    }
+
+
+def _issuer_key(f: dict[str, Any]) -> tuple[Any, ...] | None:
+    # A rotated CA gets a new issuer_id (so a new fingerprint) but usually keeps its name.
+    evidence = f.get("evidence") or {}
+    if (f.get("object") or {}).get("kind") != "pki_issuer" or not evidence.get("issuer_name"):
+        return None
+    return (f["rule_id"], f.get("namespace"), evidence.get("mount"), evidence["issuer_name"])
+
+
+def diff_documents(old: dict[str, Any], new: dict[str, Any], started: datetime) -> dict[str, Any]:
+    old_by = {f["fingerprint"]: f for f in old["findings"]}
+    new_by = {f["fingerprint"]: f for f in new["findings"]}
+    resolved = [f for fp, f in old_by.items() if fp not in new_by]
+    added = [f for fp, f in new_by.items() if fp not in old_by]
+    unchanged = [f for fp, f in new_by.items() if fp in old_by]
+
+    rotated = []
+    pending = {key: f for f in added if (key := _issuer_key(f)) is not None}
+    for f in list(resolved):
+        match = pending.pop(key, None) if (key := _issuer_key(f)) is not None else None
+        if match is not None:
+            rotated.append({"old": f, "new": match})
+            resolved.remove(f)
+            added.remove(match)
+
+    warnings = []
+    old_run, new_run = old["run"], new["run"]
+    for key in DIFF_RUN_KEYS:
+        if old_run.get(key) != new_run.get(key):
+            warnings.append(f"the runs differ in {key} ({old_run.get(key)!r} vs {new_run.get(key)!r}): they may not describe the same scope")
+    for label, document in (("old", old), ("new", new)):
+        if not (document.get("coverage") or {}).get("complete", False):
+            warnings.append(f"the {label} run's coverage is incomplete: a resolved or new finding may just be unread")
+    old_at, new_at = parse_time(old_run.get("generated_at")), parse_time(new_run.get("generated_at"))
+    if old_at and new_at and new_at < old_at:
+        warnings.append("the new run is older than the old one: the files may be in the wrong order")
+
+    return {
+        "run": {"tool": TOOL_NAME, "tool_version": TOOL_VERSION, "schema_version": SCHEMA_VERSION, "generated_at": iso(started), "mode": "offline"},
+        "runs": {"old": old_run, "new": new_run},
+        "warnings": warnings,
+        "summary": {"new": count_findings(added), "resolved": count_findings(resolved), "unchanged": len(unchanged), "rotated": len(rotated)},
+        "findings": {"new": added, "resolved": resolved, "rotated": rotated, "unchanged": unchanged},
+    }
+
+
 # --------------------------------------------------------------------------- documents
 
 
@@ -1572,6 +1650,14 @@ def cmd_access(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_diff(args: argparse.Namespace) -> int:
+    old, new = load_findings_document(args.old), load_findings_document(args.new)
+    started = utc_now()
+    document = diff_documents(old, new, started)
+    print(write_json(output_path(args.output_dir, str(new["run"].get("cluster_name") or "vault"), "diff", started), document))
+    return EXIT_OK
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="vault_posture.py",
@@ -1605,6 +1691,10 @@ def build_parser() -> argparse.ArgumentParser:
     access.add_argument("--path", action="append", required=True, help="request path to evaluate, e.g. secret/data/app; repeatable")
     access.add_argument("--capability", choices=("create", "read", "update", "patch", "delete", "list", "sudo"), help="also report which policies grant this capability")
     access.set_defaults(func=cmd_access)
+    diff = sub.add_parser("diff", parents=[common], help="offline: compare two findings documents by fingerprint -> diff.json")
+    diff.add_argument("old", help="the earlier findings document (audit, roles, pki, quotas or security)")
+    diff.add_argument("new", help="the later findings document")
+    diff.set_defaults(func=cmd_diff)
     return parser
 
 

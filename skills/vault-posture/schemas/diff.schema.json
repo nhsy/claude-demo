@@ -1,0 +1,257 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nhsy/claude-demo/skills/vault-posture/schemas/diff.schema.json",
+  "title": "vault-posture diff (offline comparison of two findings documents) document",
+  "type": "object",
+  "required": [
+    "run",
+    "runs",
+    "warnings",
+    "summary",
+    "findings"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "required": [
+        "fingerprint",
+        "rule_id",
+        "severity",
+        "category",
+        "title",
+        "namespace",
+        "object",
+        "detail",
+        "evidence"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "fingerprint": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$"
+        },
+        "rule_id": {
+          "type": "string",
+          "pattern": "^VP-[A-Z]+-[0-9]{3}$"
+        },
+        "severity": {
+          "enum": [
+            "high",
+            "medium",
+            "low",
+            "info"
+          ]
+        },
+        "category": {
+          "enum": [
+            "quotas",
+            "security",
+            "plugins",
+            "roles",
+            "pki"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "object": {
+          "type": "object",
+          "required": [
+            "kind",
+            "path"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "type": "string"
+            },
+            "path": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "detail": {
+          "type": "string"
+        },
+        "evidence": {
+          "type": "object"
+        },
+        "namespace": {
+          "type": "string",
+          "pattern": "^(/|.+/)$"
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/finding"
+      }
+    },
+    "counts": {
+      "type": "object",
+      "required": [
+        "total",
+        "by_severity",
+        "by_rule"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "by_severity": {
+          "type": "object",
+          "required": [
+            "high",
+            "medium",
+            "low",
+            "info"
+          ],
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "by_rule": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^VP-[A-Z]+-[0-9]{3}$"
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "source_run": {
+      "type": "object",
+      "description": "The compared document's own run block, copied as is"
+    }
+  },
+  "properties": {
+    "run": {
+      "type": "object",
+      "required": [
+        "tool",
+        "tool_version",
+        "schema_version",
+        "generated_at",
+        "mode"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "tool": {
+          "const": "vault-posture"
+        },
+        "tool_version": {
+          "type": "string"
+        },
+        "schema_version": {
+          "type": "string"
+        },
+        "generated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "mode": {
+          "const": "offline"
+        }
+      }
+    },
+    "runs": {
+      "type": "object",
+      "required": [
+        "old",
+        "new"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "old": {
+          "$ref": "#/$defs/source_run"
+        },
+        "new": {
+          "$ref": "#/$defs/source_run"
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "new",
+        "resolved",
+        "unchanged",
+        "rotated"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "new": {
+          "$ref": "#/$defs/counts"
+        },
+        "resolved": {
+          "$ref": "#/$defs/counts"
+        },
+        "unchanged": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rotated": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "findings": {
+      "type": "object",
+      "required": [
+        "new",
+        "resolved",
+        "rotated",
+        "unchanged"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "new": {
+          "$ref": "#/$defs/findings"
+        },
+        "resolved": {
+          "$ref": "#/$defs/findings"
+        },
+        "unchanged": {
+          "$ref": "#/$defs/findings"
+        },
+        "rotated": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "old",
+              "new"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "old": {
+                "$ref": "#/$defs/finding"
+              },
+              "new": {
+                "$ref": "#/$defs/finding"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
