@@ -1,6 +1,6 @@
 ---
 name: vault-posture
-description: READ-ONLY, observe-only HashiCorp Vault security posture review. ALWAYS load this skill before answering any question about a vault-posture review or its results ("my last posture review", "the last review", files in .tmp/vault-posture/ or named *-posture-*, *-roles-*, *-pki-*, *-quotas-*, *-security-*, access-*.json), even when the file could be read directly. Use when the user asks whether Vault is configured safely; about auth role bindings (JWT/OIDC or GitHub Actions roles, Kubernetes service-account roles, AWS IAM or EC2 roles, GCP IAM or GCE roles, Azure managed identity roles, TLS certificate (cert) roles, AppRole, token roles, roles that yield root); PKI CA or issuer expiry, weak CA keys, CRL/OCSP/AIA or tidy settings; rate-limit or lease-count quotas; whether a root token generation or rekey is in progress; barrier key age or rotation; external plugins; or which ACL policies grant a capability on a path ("who can write secret/x", "why am I denied"). Also use when given vault-posture JSON files to interpret. For cluster health, inventory, entities or client counts use the vault-ops skill instead. Observes and reports only; NEVER makes changes to Vault.
+description: READ-ONLY, observe-only HashiCorp Vault security posture review. ALWAYS load this skill before answering any question about a vault-posture review or its results ("my last posture review", "the last review", files in .tmp/vault-posture/ or named *-posture-*, *-roles-*, *-pki-*, *-quotas-*, *-security-*, *-diff-*, access-*.json), even when the file could be read directly. Use when the user asks whether Vault is configured safely; about auth role bindings (JWT/OIDC or GitHub Actions roles, Kubernetes service-account roles, AWS IAM or EC2 roles, GCP IAM or GCE roles, Azure managed identity roles, TLS certificate (cert) roles, AppRole, token roles, roles that yield root); PKI CA or issuer expiry, weak CA keys, CRL/OCSP/AIA or tidy settings; rate-limit or lease-count quotas; whether a root token generation or rekey is in progress; barrier key age or rotation; external plugins; or which ACL policies grant a capability on a path ("who can write secret/x", "why am I denied"). Also use when given vault-posture JSON files to interpret or compare ("what changed since my last review"). For cluster health, inventory, entities or client counts use the vault-ops skill instead. Observes and reports only; NEVER makes changes to Vault.
 allowed-tools: Bash(uv run --script *vault_posture.py *), Read, Glob
 ---
 
@@ -12,7 +12,7 @@ Code collects and checks; you interpret. All Vault access goes through the bundl
 
 | You DO (observe) | You NEVER do (change) |
 | --- | --- |
-| Run `vault_posture.py` subcommands: `audit`, `quotas`, `security`, `roles`, `pki`, `access` | Run `vault` CLI commands, `curl` or any other client against Vault |
+| Run `vault_posture.py` subcommands: `audit`, `quotas`, `security`, `roles`, `pki`, `access`, `diff` | Run `vault` CLI commands, `curl` or any other client against Vault |
 | Read the JSON files the script writes | Cancel a root generation or rekey, rotate a key, write a role, quota or issuer, register a plugin |
 | Explain findings and their impact | Execute a remediation command, even when asked |
 | Draft remediation as text for an operator | Mint, renew, revoke or look up tokens |
@@ -47,9 +47,11 @@ Whether you just ran the script or are reading an existing file, each answer tha
 | Quotas / noisy clients / lease explosions | `quotas` | `*-quotas-*.json` |
 | Root generation or rekey in progress / barrier key / plugins | `security [--key-age-days 365]` | `*-security-*.json` |
 | "Who can do X on path Y?" / "why is this denied?" from policy files | `access --policy <file-or-dir> --path <path> [--path ...] [--capability update]` | `access-*.json` |
+| "What changed since the last review?" | `diff <older.json> <newer.json>` | `*-diff-*.json` |
 
 - Live subcommands take `--redact-addr`, `--fail-on <severity>` (exit 3) and `--fail-on-gaps` (exit 2). `roles`, `pki` and `audit` walk the start namespace (default `VAULT_NAMESPACE` or root) and every child namespace, five levels deep.
 - `access` is **offline**: it needs no Vault, token or network. It evaluates ACL policy files (`.hcl` or `.json`, e.g. from the user's Terraform or policy repo) the way Vault does: an exact path beats a wildcard, the highest-priority wildcard decides, identical paths merge, deny wins. Use it for "which policy grants this" and "why is this denied" questions. It cannot see policies that only exist in Vault, nor identity-group or Sentinel effects: say so.
+- `diff` is **offline** too: it compares two result files of the same kind (for example two `*-posture-*.json`) by fingerprint. Pass the older file first.
 - Results go to `$VAULT_POSTURE_OUTPUT_DIR` if set, else `.tmp/vault-posture/` in the working directory; `--output-dir` overrides both. The script adds a `.gitignore` to a directory it creates.
 
 ## Setup problems
@@ -79,10 +81,11 @@ claude
 
 1. **Files first.** If the user points at existing vault-posture JSON files, use them and skip to step 3. For "the last review", look for the newest `*-posture-*.json` (or the subcommand's file) in the output directory.
 2. **Run** the matching subcommand. On exit 1, report the stderr message (see Setup problems) and stop.
-3. **Read** the JSON file and `references/rules.md` with the Read tool. For a large estate, read `summary` and `findings` first; `data` holds the raw (allowlisted) inventory.
-4. **Coverage first.** If `coverage.complete` is false, open with the `denied` or `error` scopes (and their namespaces) and say the results are partial. `unsupported` (Enterprise-only on Community) and `not_applicable` (e.g. recovery keys on a Shamir seal) are complete answers: list them under "Not covered", not as gaps.
-5. **Explain**, following "Every answer about findings" above. For each finding: what it is, why it matters here, the namespace and object, the evidence, and its "For an operator to run" command. Group repeated rules (e.g. ten audience-only JWT roles) with a count and up to three examples.
-6. **Finish** with a summary table (rule, severity, count), the path of the file read or written, "Not covered", and the read-only closing line.
+3. **Compare.** If the output directory holds an earlier file of the same kind for the same cluster (the `{cluster}-{kind}-` prefix), or the user asks what changed, run `diff <older> <newer>` and read its file too. Report new and resolved findings first, then the rest.
+4. **Read** the JSON file and `references/rules.md` with the Read tool. For a large estate, read `summary` and `findings` first; `data` holds the raw (allowlisted) inventory.
+5. **Coverage first.** If `coverage.complete` is false, open with the `denied` or `error` scopes (and their namespaces) and say the results are partial. `unsupported` (Enterprise-only on Community) and `not_applicable` (e.g. recovery keys on a Shamir seal) are complete answers: list them under "Not covered", not as gaps.
+6. **Explain**, following "Every answer about findings" above. For each finding: what it is, why it matters here, the namespace and object, the evidence, and its "For an operator to run" command. Group repeated rules (e.g. ten audience-only JWT roles) with a count and up to three examples.
+7. **Finish** with a summary table (rule, severity, count), the path of the file read or written, "Not covered", and the read-only closing line.
 
 ## Reading the files
 
@@ -90,6 +93,7 @@ claude
 - `coverage.scopes[]`: `{namespace, scope, status}` per read; statuses `ok`, `absent` (none defined), `denied`, `unsupported`, `not_applicable`, `error`.
 - `findings[]`: `rule_id`, `severity`, `namespace`, `object`, `detail`, `evidence`, ranked high first. `fingerprint` is stable across runs, so two files can be compared by fingerprint.
 - `data.roles.roles[]`: each role's allowlisted binding fields (never role IDs or secret IDs). `data.pki`: per mount `auto_tidy`/`crl`/`urls`, per issuer the parsed certificate facts (`not_after`, key type and size, signature hash; never the PEM). `data.security`: `started/progress/required` only for root generation and rekey.
+- `*-diff-*.json`: `runs.old` and `runs.new` (each file's `run` block), `warnings[]` (read these first: a different cluster, namespace or edition, incomplete coverage in either run, or files in the wrong order), `summary` (`new` and `resolved` counted by severity and rule, `unchanged` and `rotated` counts) and `findings.new`, `findings.resolved`, `findings.unchanged`, `findings.rotated`. A `rotated` pair is the same PKI rule on a CA that was re-issued under the same name: report it as still open, not as fixed. With incomplete coverage, a resolved finding may just be unread: say so.
 - `access-*.json`: `queries[]` with `combined` (what a token holding all the given policies gets: `capabilities`, `decision` = allow / explicit_deny / implicit_deny, `matched_path`, `policies`), `per_policy` (each policy alone) and, with `--capability`, `granted_by`. `policies.unparsed` lists files that could not be read.
 
 ## Scope
