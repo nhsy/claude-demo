@@ -7,7 +7,8 @@ argument-hint: "[issue-or-pr-number]"
 
 # Issue SDLC
 
-Run exactly ONE stage, report, and stop.
+Run exactly ONE stage, report, and stop. For parallel work, start one
+session per issue with `/issue-sdlc <N>`; never fan out subagents.
 
 PRs are merged with "Rebase and merge", so every commit on an agent/
 branch lands on main as written. Make small, self-contained commits
