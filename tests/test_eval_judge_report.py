@@ -69,9 +69,9 @@ def test_no_results(tmp_path):
     assert report.render(report.load(tmp_path)) == "No eval:judge results found.\n"
 
 
-def test_suite_has_ten_offline_cases():
+def test_suite_has_eleven_offline_cases():
     prompts = sorted((ROOT / "evals").glob("*/prompt.md"))
-    assert len(prompts) == 10
+    assert len(prompts) == 11
     for prompt in prompts:
         front = prompt.read_text().split("---")[1]
         assert "offline" in front, prompt
