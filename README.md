@@ -16,6 +16,7 @@ A single-file `uv run --script` Python program (`hvac`, `requests`, `cryptograph
 | `security` | VP-SEC-001..004, VP-PLUG-001..002 | Root/recovery token generation or rekey in progress, barrier key age and rotation, external plugins |
 | `audit` | all live rules | One combined `*-posture-*.json` |
 | `access` | offline | "Who can do X on path Y" from ACL policy files, using Vault's matching rules (checked against `sys/capabilities`) |
+| `diff` | offline | "What changed since the last review": new, resolved and unchanged findings between two result files, by fingerprint |
 
 The catalogue with remediation is [`skills/vault-posture/references/rules.md`](skills/vault-posture/references/rules.md).
 
@@ -73,6 +74,7 @@ All are in-memory dev servers with root token `root`. `task seed` (`scripts/seed
 | `tests/test_checks.py` | Quota and security rules fire on their trigger and stay quiet on their control; every rule is in `rules.md` |
 | `tests/test_roles.py`, `tests/test_pki.py` | Role and PKI rules, expiry windows, certificate parsing |
 | `tests/test_access.py` | Policy parsing (HCL, JSON, legacy) and ACL evaluation against results captured from Vault |
+| `tests/test_diff.py` | Comparing two runs: new / resolved / unchanged, rotated PKI issuers, mismatch and coverage warnings, schema validation |
 | `tests/test_collect.py` | Coverage classification, namespace walking, field allowlisting |
 | `tests/test_readonly.py` | Through real hvac/requests with the transport patched: only GET is sent, namespaces go in the header, no token or secret reaches output |
 | `tests/test_cli.py` | Output files (0600, `.gitignore`), exit codes, setup errors, schema validation |

@@ -68,6 +68,7 @@ claude
 | `security` | VP-SEC-001..004, VP-PLUG-001..002 | Root/recovery token generation or rekey in progress; barrier key age; no rotation interval; external and unversioned plugins |
 | `audit` | all of the above | One combined file |
 | `access` | none (offline) | Effective capabilities of ACL policy files on paths, evaluated with Vault's own matching rules |
+| `diff` | none (offline) | New, resolved and unchanged findings between two result files, by fingerprint |
 
 Every rule, with its meaning and a drafted fix, is in [`references/rules.md`](references/rules.md).
 
@@ -78,5 +79,5 @@ Every rule, with its meaning and a drafted fix, is in [`references/rules.md`](re
 | `SKILL.md` | Instructions Claude follows |
 | `scripts/vault_posture.py` | The single-file collector (PEP 723, `uv run --script`) |
 | `references/rules.md` | Rule catalogue with severities and operator remediation |
-| `schemas/findings.schema.json`, `schemas/access.schema.json` | Output document schemas |
+| `schemas/findings.schema.json`, `schemas/access.schema.json`, `schemas/diff.schema.json` | Output document schemas |
 | `policies/vault-posture-readonly.hcl`, `policies/vault-posture-pki-reader.hcl` | Read-only token policies (generated) |
