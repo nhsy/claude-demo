@@ -22,6 +22,8 @@ SEEDED_RULES = {
     "VP-SEC-004",
     "VP-PLUG-001",
     "VP-PLUG-002",
+    "VP-AUDIT-002",
+    "VP-AUDIT-003",
     *(f"VP-ROLE-00{i}" for i in range(1, 10)),
     *(f"VP-AWS-00{i}" for i in range(1, 5)),
     *(f"VP-GCP-00{i}" for i in range(1, 5)),
@@ -176,6 +178,15 @@ def test_no_seal_operation_secrets_in_output(posture):
     for key in ("generate_root", "rekey"):
         assert set(posture["data"]["security"][key]) <= set(vp.ATTEMPT_FIELDS)
     assert "nonce" not in json.dumps(posture)
+
+
+def test_audit_devices_keep_only_allowlisted_fields(posture):
+    devices = posture["data"]["security"]["audit_devices"]
+    assert [d["path"] for d in devices] == ["posture-raw/"]
+    for device in devices:
+        assert set(device) <= {"path", "options", *vp.AUDIT_DEVICE_FIELDS}
+        assert set(device["options"]) <= set(vp.AUDIT_OPTION_FIELDS)
+    assert "file_path" not in json.dumps(devices)
 
 
 @pytest.mark.parametrize(

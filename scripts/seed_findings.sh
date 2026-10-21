@@ -5,6 +5,7 @@
 #   VP-SEC-001/002    a root token generation and an unseal-key rekey left in progress
 #   VP-SEC-004        dev servers have no rotation interval
 #   VP-PLUG-001/002   an external plugin registered without a version
+#   VP-AUDIT-002/003  one audit device, logging raw values and unhashed accessors (file_path=discard writes nothing)
 #   VP-ROLE-001..009  JWT, Kubernetes, AppRole and token roles with loose bindings
 #   VP-AWS-001..004   AWS IAM and EC2 roles (written without AWS credentials: no unique-ID lookups)
 #   VP-GCP-001..004   GCP IAM and GCE roles (written without GCP credentials: Vault checks none at write)
@@ -18,7 +19,7 @@
 # auth/k8s/prod/ and ca/int/ (two-segment mounts) show the policies reach deeper mount paths.
 # Enterprise only: namespaces team-a/, team-a/prod/ and team-a/prod/eu/, with one firing object at each
 # level (VP-ROLE-007, VP-ROLE-005, VP-PKI-002/004), show the per-level grants reach every depth.
-# Unit tests cover what a dev server can't show: VP-QUOTA-001 (conflicts with 003), VP-SEC-003
+# Unit tests cover what a dev server can't show: VP-QUOTA-001 (conflicts with 003), VP-AUDIT-001 (conflicts with 002), VP-SEC-003
 # (year-old key), VP-PKI-001 (expired issuer) and VP-PKI-007 (Vault refuses weak keys). Idempotent.
 set -euo pipefail
 
@@ -43,6 +44,9 @@ write sys/quotas/rate-limit/userpass-login path=auth/userpass/ rate=50
 write sys/quotas/config enable_rate_limit_audit_logging=false
 
 vault plugin register -sha256="$(sha256 "$PLUGIN")" secret posture-dummy >/dev/null
+
+vault read -format=json sys/audit | jq -e '.data."posture-raw/"' >/dev/null \
+  || vault audit enable -path=posture-raw file file_path=discard log_raw=true hmac_accessor=false >/dev/null
 
 if [[ "$(vault read -field=started sys/generate-root/attempt)" != "true" ]]; then
   vault operator generate-root -init -format=json >/dev/null  # discard the OTP

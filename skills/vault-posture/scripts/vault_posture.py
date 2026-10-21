@@ -258,6 +258,10 @@ RULES: dict[str, Rule] = {
     "VP-SEC-004": Rule("info", "security", "Time-based automatic barrier key rotation is disabled"),
     "VP-PLUG-001": Rule("low", "plugins", "External plugin is registered without a version"),
     "VP-PLUG-002": Rule("info", "plugins", "External (non-builtin) plugins are registered"),
+    # Same checks and severities as vault-ops VT-AUD-001..003 (a confirmed overlap).
+    "VP-AUDIT-001": Rule("medium", "audit", "No audit device is enabled"),
+    "VP-AUDIT-002": Rule("low", "audit", "Only one audit device is enabled"),
+    "VP-AUDIT-003": Rule("medium", "audit", "Audit device logs raw values or unhashed token accessors"),
     "VP-ROLE-001": Rule("high", "roles", "Role can issue tokens with the root policy"),
     "VP-ROLE-002": Rule("medium", "roles", "JWT role is bound only by audience"),
     "VP-ROLE-003": Rule("medium", "roles", "JWT/OIDC role binds claims with a wildcard"),
@@ -782,7 +786,47 @@ def check_security(data: SecurityData, now: datetime, key_age_days: int = KEY_AG
                 count=len(external),
             )
         )
+
+    devices = data.audit_devices
+    if devices is not None and not devices:
+        found.append(finding("VP-AUDIT-001", "audit_devices", "sys/audit", "No audit device is enabled: requests to this cluster leave no audit trail.", devices=0))
+    if devices is not None and len(devices) == 1:
+        found.append(
+            finding(
+                "VP-AUDIT-002",
+                "audit_device",
+                devices[0].get("path"),
+                f"Only one audit device (`{devices[0].get('path')}`) is enabled: if Vault can't write to it, Vault refuses every request.",
+                device_path=devices[0].get("path"),
+                device_type=devices[0].get("type"),
+            )
+        )
+    for device in devices or []:
+        options = device.get("options") or {}
+        log_raw, hmac_accessor = option_flag(options.get("log_raw"), False), option_flag(options.get("hmac_accessor"), True)
+        problems = [what for what, bad in (("`log_raw=true` writes secrets in clear text", log_raw), ("`hmac_accessor=false` writes token accessors unhashed", not hmac_accessor)) if bad]
+        if problems:
+            found.append(
+                finding(
+                    "VP-AUDIT-003",
+                    "audit_device",
+                    device.get("path"),
+                    f"Audit device `{device.get('path')}`: {'; '.join(problems)}.",
+                    device_type=device.get("type"),
+                    log_raw=log_raw,
+                    hmac_accessor=hmac_accessor,
+                )
+            )
     return found
+
+
+def option_flag(value: Any, default: bool) -> bool:
+    """An audit device option: Vault returns them as strings ("true") and omits ones left at their default."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str) and value.strip().lower() in ("true", "false"):
+        return value.strip().lower() == "true"
+    return default
 
 
 # --------------------------------------------------------------------------- roles
@@ -1953,6 +1997,8 @@ def _summary_metrics(merged: dict[str, Any]) -> str | None:
     if (security := data.get("security")) is not None:
         if (plugins := security.get("external_plugins")) is not None:
             rows.append(["External plugins", str(len(plugins))])
+        if (devices := security.get("audit_devices")) is not None:
+            rows.append(["Audit devices", ", ".join(f"`{d.get('path')}` ({d.get('type')})" for d in devices) or "none"])
         if key := security.get("key_status"):
             installed = parse_time(key.get("install_time"))
             rows.append(["Barrier key", f"term {key.get('term')}, installed {installed.strftime('%Y-%m-%d') if installed else 'unknown'}"])

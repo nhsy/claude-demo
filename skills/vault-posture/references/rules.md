@@ -27,6 +27,16 @@ Every finding carries a `rule_id` from this table. Remediation commands are **dr
 | VP-PLUG-001 | low | An external plugin (`evidence.plugin_type`/`evidence.plugin_name`) is registered without a version, so which binary runs can't be tracked or pinned across upgrades. | `vault plugin register -sha256=<sha> -version=<semver> <type> <name>`, then `vault plugin reload -plugin=<name>` | Registering a versioned entry doesn't switch mounts to it: each mount pins its plugin version (`vault secrets tune -plugin-version=…`). |
 | VP-PLUG-002 | info | External (non-builtin) plugins are registered (`evidence.plugins`). Each one runs third-party code inside Vault's trust boundary. | No catalogue command: review each plugin's source, owner and update cadence; deregister unused ones with `vault plugin deregister -version=<v> <type> <name>` after confirming no mount uses them. | Inventory for supply-chain review, not a defect. |
 
+## Audit devices
+
+The same checks, with the same severities, as vault-ops VT-AUD-001..003 (a confirmed overlap), so a posture review covers the audit trail on its own. Reading `sys/audit` needs `sudo` from the root namespace, which the read-only policy grants on that path only.
+
+| Rule | Severity | Meaning | Remediation (for an operator to run) | Caveats |
+| --- | --- | --- | --- | --- |
+| VP-AUDIT-001 | medium | No audit device is enabled (`sys/audit` readable and empty). Requests leave no audit trail, so nothing shows who read or changed what. | `vault audit enable file file_path=/var/log/vault/audit.log`, then a second device (see VP-AUDIT-002) | vault-ops reports the same as VT-AUD-001. Point the device at the operator's log pipeline; confirm the path is writable on every node. |
+| VP-AUDIT-002 | low | Exactly one audit device is enabled (`evidence.device_path`, `evidence.device_type`). If Vault can't write to it (disk full, socket down), Vault refuses every request. | `vault audit enable -path=<second-device> syslog` (or `file file_path=<another-path>`) | vault-ops reports the same as VT-AUD-002. HashiCorp recommends at least two devices; two file devices can't share a `file_path`. |
+| VP-AUDIT-003 | medium | An audit device writes sensitive values in clear (`evidence.log_raw: true`) or token accessors unhashed (`evidence.hmac_accessor: false`). Anyone who can read the log can read secrets or use the accessors. | `vault audit enable -path=<replacement> <type> <options without log_raw or hmac_accessor=false>`, then `vault audit disable <device-path>` | vault-ops reports the same as VT-AUD-003. Options can't be changed in place: add the replacement first so there is never a gap, and treat logs already written as containing secrets. |
+
 ## Auth roles
 
 Role findings carry `namespace`, `evidence.mount` and `evidence.role`; `object.path` is the role's API path. Add `-namespace=<namespace>` to every command for a role outside the root namespace. On these auth methods a `vault write` to an existing role updates only the fields given; the operator should `vault read` the role before and after.
@@ -86,6 +96,6 @@ PKI findings need the `vault-posture-pki-reader` add-on policy; without it the `
 When reporting, group in this order:
 
 1. VP-SEC-001 (possible unauthorised root), VP-ROLE-001 (root via login), VP-ROLE-005 (any pod logs in), VP-AWS-001/002 (any AWS account logs in), VP-GCP-001/002 (any GCP project logs in), VP-PKI-001 (expired CA), VP-SEC-002.
-2. VP-ROLE-002/003/006/007, VP-GCP-003, VP-AZURE-001, VP-CERT-001/002 (loose login bindings), VP-LDAP-001/002/003 (LDAP passwords exposed or not checked), VP-PKI-002/006/007, VP-QUOTA-001/002 (no protection from noisy clients or lease explosions).
-3. VP-QUOTA-003, VP-SEC-003, VP-PLUG-001, VP-ROLE-004/008/009, VP-AWS-003/004, VP-GCP-004, VP-AZURE-002/003, VP-PKI-003/004/005/008.
+2. VP-ROLE-002/003/006/007, VP-GCP-003, VP-AZURE-001, VP-CERT-001/002 (loose login bindings), VP-LDAP-001/002/003 (LDAP passwords exposed or not checked), VP-PKI-002/006/007, VP-QUOTA-001/002 (no protection from noisy clients or lease explosions), VP-AUDIT-001/003 (no audit trail, or secrets in it).
+3. VP-QUOTA-003, VP-SEC-003, VP-PLUG-001, VP-AUDIT-002 (one audit sink can block every request), VP-ROLE-004/008/009, VP-AWS-003/004, VP-GCP-004, VP-AZURE-002/003, VP-PKI-003/004/005/008.
 4. Info: VP-QUOTA-004, VP-SEC-004, VP-PLUG-002.

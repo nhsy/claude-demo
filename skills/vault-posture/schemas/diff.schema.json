@@ -48,6 +48,7 @@
             "quotas",
             "security",
             "plugins",
+            "audit",
             "roles",
             "pki"
           ]
