@@ -40,6 +40,7 @@ GitHub issues move through `agent-*` labels; the project skill `.claude/skills/i
 
 | Label | Meaning | Set by |
 | --- | --- | --- |
+| `agent-draft` | Drafted by `/issue-sdlc new`; waiting for a person to review it and swap it for `agent-ready` | Claude Code |
 | `agent-ready` | Meets the definition of ready; `/issue-sdlc` will plan it | a person |
 | `agent-working` | A Claude Code session holds the issue | Claude Code |
 | `agent-plan-review` | Implementation plan posted as a comment; waiting for a person | Claude Code |
@@ -49,7 +50,7 @@ GitHub issues move through `agent-*` labels; the project skill `.claude/skills/i
 | `agent-blocked` | Claude asked a question, or a run stopped | Claude Code |
 | `agent-done` | PR merged and issue closed; marks work the pipeline delivered | Claude Code (next `/issue-sdlc` run) |
 
-The two human gates are approving the plan and merging the PR. A plan is approved by a person's comment starting "Approved" (with answers to any questions in the plan), then `agent-plan-review` → `agent-build`. Labels alone don't show who set them, so Build won't start without that comment. `ready` and `in-progress` stay human-owned labels, so the two pipelines never trigger each other. New pipeline issues use the "Agent task" issue form (`.github/ISSUE_TEMPLATE/agent-task.yml`); PRs fill in `.github/pull_request_template.md`.
+The two human gates are approving the plan and merging the PR. A plan is approved by a person's comment starting "Approved" (with answers to any questions in the plan), then `agent-plan-review` → `agent-build`. Labels alone don't show who set them, so Build won't start without that comment. `ready` and `in-progress` stay human-owned labels, so the two pipelines never trigger each other. New pipeline issues use the "Agent task" issue form (`.github/ISSUE_TEMPLATE/agent-task.yml`), filled in by hand or drafted in the same shape by `/issue-sdlc new "<idea>"`; PRs fill in `.github/pull_request_template.md`.
 
 ### Definition of ready
 

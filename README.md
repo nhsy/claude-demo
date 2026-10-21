@@ -97,17 +97,18 @@ All are in-memory dev servers with root token `root`. `task seed` (`scripts/seed
 Claude Code works labelled GitHub issues through the SDLC from your terminal: refine and plan, build, test, self-review, open a draft PR, and fix review feedback. People keep two gates: approving the plan and merging the PR. The project skill [`.claude/skills/issue-sdlc`](.claude/skills/issue-sdlc/SKILL.md) finds the next item in GitHub, runs one stage and stops. Nothing runs on its own: you start every run by typing `/issue-sdlc` (or `/issue-sdlc 42` for one item). There are no GitHub Actions and no CI-hosted agent.
 
 ```
+/issue-sdlc new "<idea>" ─▶ agent-draft ─▶ (you review, swap for agent-ready)
 agent-ready ─▶ /issue-sdlc plans ─▶ agent-plan-review ─▶ (you comment "Approved") agent-build
             ─▶ /issue-sdlc builds ─▶ draft PR, agent-pr-review ─▶ (you comment, set agent-fix on the PR ⟲ /issue-sdlc fixes)
             ─▶ (you) Rebase and merge, which closes the issue ─▶ next /issue-sdlc run: agent-done
 any stage ─▶ agent-blocked (question or failed run) ─▶ answer, then re-add the stage's label (agent-ready, agent-build or agent-fix)
 ```
 
-Labels, the definition of ready, and branch and commit conventions are in [CLAUDE.md](CLAUDE.md). New work uses the **Agent task** issue form; `/issue-sdlc` fills in the PR template.
+Labels, the definition of ready, and branch and commit conventions are in [CLAUDE.md](CLAUDE.md). New work uses the **Agent task** issue form, filled in by hand or drafted in the same shape by `/issue-sdlc new "<idea>"`; `/issue-sdlc` fills in the PR template.
 
 **One-time setup** (needs `gh` signed in with admin rights on the repo):
 
-1. `task github:setup`: creates the eight `agent-*` labels with colours and descriptions (rerunning resets them), then checks the merge settings without changing them. If they differ from rebase merging only with automatic head-branch deletion, it prints each setting to change under **Settings → General → Pull Requests**. It uses only the REST API (`gh api`), so it also works where GitHub GraphQL is blocked, as in Claude Code cloud sessions.
+1. `task github:setup`: creates the nine `agent-*` labels with colours and descriptions (rerunning resets them), then checks the merge settings without changing them. If they differ from rebase merging only with automatic head-branch deletion, it prints each setting to change under **Settings → General → Pull Requests**. It uses only the REST API (`gh api`), so it also works where GitHub GraphQL is blocked, as in Claude Code cloud sessions.
 2. Protect `main` with a branch protection rule or ruleset that requires a pull request, passing checks and linear history (linear history rejects any PR containing a merge commit). Don't require an approving review while Claude Code works as your GitHub account: it opens PRs as you, GitHub doesn't let you approve your own PR, and every merge would need an admin bypass. Require one once the agent has its own identity (a GitHub App or machine user).
 3. In Claude Code: `/plugin install code-review@claude-plugins-official` and `/plugin install pr-review-toolkit@claude-plugins-official`.
 
