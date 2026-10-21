@@ -123,7 +123,7 @@ def test_seeded_role_and_pki_details(posture):
     assert ("VP-ROLE-005", "auth/k8s/prod/role/any-pod") in by_path
     nested = [f for f in posture["findings"] if f["rule_id"] == "VP-PKI-003" and f["object"]["path"].startswith("ca/int/issuer/")]
     assert [f["evidence"]["issuer_name"] for f in nested] == ["nested"]
-    expiring = next(f for f in posture["findings"] if f["rule_id"] == "VP-PKI-002")
+    expiring = next(f for f in posture["findings"] if f["rule_id"] == "VP-PKI-002" and f["namespace"] == "/")
     assert expiring["evidence"]["issuer_name"] == "critical"
     assert "BEGIN CERTIFICATE" not in json.dumps(posture)
     assert "posture-bind" not in json.dumps(posture)  # the LDAP bind DN is never kept
@@ -134,6 +134,23 @@ def test_seeded_plugin_and_quota_details(posture):
     assert plugin["object"]["path"] == "secret/posture-dummy"
     scoped = next(f for f in posture["findings"] if f["rule_id"] == "VP-QUOTA-003")
     assert scoped["evidence"]["paths"] == ["auth/userpass/"]
+
+
+ENTERPRISE_NAMESPACES = ["/", "team-a/", "team-a/prod/", "team-a/prod/eu/"]
+
+
+def test_enterprise_namespaces(posture):
+    """Each seeded namespace level is walked and read with the read-only token's per-level grants."""
+    if posture["run"]["edition"] != "enterprise":
+        pytest.skip("namespaces are Enterprise only")
+    assert posture["data"]["roles"]["namespaces"] == ENTERPRISE_NAMESPACES
+    assert posture["data"]["pki"]["namespaces"] == ENTERPRISE_NAMESPACES
+    fired = {(f["namespace"], f["rule_id"], f["object"]["path"]) for f in posture["findings"]}
+    assert ("team-a/", "VP-ROLE-007", "auth/approle/role/team-a-role-id-only") in fired
+    assert ("team-a/prod/", "VP-ROLE-005", "auth/kubernetes/role/prod-any-pod") in fired
+    assert ("team-a/prod/eu/", "VP-PKI-004", "pki/") in fired
+    eu = [f["evidence"]["issuer_name"] for f in posture["findings"] if f["rule_id"] == "VP-PKI-002" and f["namespace"] == "team-a/prod/eu/"]
+    assert eu == ["eu-short"]
 
 
 # The base policy grants read on every auth/<mount>config (scripts/gen_policies.py). The seed writes
