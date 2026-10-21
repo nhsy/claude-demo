@@ -12,7 +12,7 @@ Code collects and checks; you interpret. All Vault access goes through the bundl
 
 | You DO (observe) | You NEVER do (change) |
 | --- | --- |
-| Run `vault_posture.py` subcommands: `audit`, `quotas`, `security`, `roles`, `pki`, `access`, `diff` | Run `vault` CLI commands, `curl` or any other client against Vault |
+| Run `vault_posture.py` subcommands: `audit`, `quotas`, `security`, `roles`, `pki`, `access`, `diff`, `report` | Run `vault` CLI commands, `curl` or any other client against Vault |
 | Read the JSON files the script writes | Cancel a root generation or rekey, rotate a key, write a role, quota or issuer, register a plugin |
 | Explain findings and their impact | Execute a remediation command, even when asked |
 | Draft remediation as text for an operator | Mint, renew, revoke or look up tokens |
@@ -48,10 +48,12 @@ Whether you just ran the script or are reading an existing file, each answer tha
 | Root generation or rekey in progress / barrier key / plugins | `security [--key-age-days 365]` | `*-security-*.json` |
 | "Who can do X on path Y?" / "why is this denied?" from policy files | `access --policy <file-or-dir> --path <path> [--path ...] [--capability update]` | `access-*.json` |
 | "What changed since the last review?" | `diff <older.json> <newer.json>` | `*-diff-*.json` |
+| "Write up / give me a report of the review" (Markdown) | `report <result.json> [...] [--diff <diff.json>]` | `*-report-*.md` |
 
 - Live subcommands take `--redact-addr`, `--fail-on <severity>` (exit 3) and `--fail-on-gaps` (exit 2). `roles`, `pki` and `audit` walk the start namespace (default `VAULT_NAMESPACE` or root) and every child namespace, five levels deep.
 - `access` is **offline**: it needs no Vault, token or network. It evaluates ACL policy files (`.hcl` or `.json`, e.g. from the user's Terraform or policy repo) the way Vault does: an exact path beats a wildcard, the highest-priority wildcard decides, identical paths merge, deny wins. Use it for "which policy grants this" and "why is this denied" questions. It cannot see policies that only exist in Vault, nor identity-group or Sentinel effects: say so.
 - `diff` is **offline** too: it compares two result files of the same kind (for example two `*-posture-*.json`) by fingerprint. Pass the older file first.
+- `report` is **offline**: it turns one or more result files from one cluster (any mix of `audit`, `roles`, `pki`, `quotas`, `security`; repeated findings appear once) into a Markdown report, with the commands from `references/rules.md` filled in. `--diff` adds the changes since an earlier run. It writes no PDF.
 - Results go to `$VAULT_POSTURE_OUTPUT_DIR` if set, else `.tmp/vault-posture/` in the working directory; `--output-dir` overrides both. The script adds a `.gitignore` to a directory it creates.
 
 ## Setup problems
@@ -86,6 +88,7 @@ claude
 5. **Coverage first.** If `coverage.complete` is false, open with the `denied` or `error` scopes (and their namespaces) and say the results are partial. `unsupported` (Enterprise-only on Community) and `not_applicable` (e.g. recovery keys on a Shamir seal) are complete answers: list them under "Not covered", not as gaps.
 6. **Explain**, following "Every answer about findings" above. For each finding: what it is, why it matters here, the namespace and object, the evidence, and its "For an operator to run" command. Group repeated rules (e.g. ten audience-only JWT roles) with a count and up to three examples.
 7. **Finish** with a summary table (rule, severity, count), the path of the file read or written, "Not covered", and the read-only closing line.
+8. **Asked for a report or write-up?** Run `report` on the result files (and the `diff` file, if one exists) instead of composing a report by hand, then give the user its path and the top findings in a few lines.
 
 ## Reading the files
 

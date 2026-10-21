@@ -17,6 +17,8 @@ nothing here writes to Vault.
             policy files on a path (no Vault access)
   diff      offline: compare two findings documents -> {cluster}-diff-{ts}.json
             by fingerprint (no Vault access)
+  report    offline: Markdown report from findings  -> {cluster}-report-{ts}.md
+            documents, commands from references/rules.md
 
 Complements the vault-ops skill (health, inventory, policies, usage): rule IDs are VP-*.
 """
@@ -40,6 +42,7 @@ import os
 import re
 import shlex
 import sys
+import textwrap
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -1608,8 +1611,9 @@ def _cells(line: str) -> list[str]:
     return [cell.strip().replace("\\|", "|") for cell in re.split(r"(?<!\\)\|", line.strip())[1:-1]]
 
 
-def load_catalogue(path: Path = CATALOGUE_PATH) -> Catalogue:
+def load_catalogue(path: Path | None = None) -> Catalogue:
     """Parse rules.md; a missing or unreadable file gives an empty catalogue with a warning, never an error."""
+    path = path or CATALOGUE_PATH
     try:
         text = path.read_text()
     except (OSError, UnicodeDecodeError) as exc:
@@ -1647,6 +1651,332 @@ def fill_command(command: str, finding_: dict[str, Any]) -> str:
         words = filled.split(" ", 2)
         filled = " ".join([*words[:2], f"-namespace={namespace}", *words[2:]])
     return filled
+
+
+# --------------------------------------------------------------------------- report (offline Markdown)
+
+# Layout follows the vault-tools full-audit report so the two read alike. Each rule group shows
+# at most this many findings; the rest are counted, and every one stays in the result files.
+REPORT_EXAMPLES = 3
+# Prose is wrapped well inside vault-tools' markdownlint line limit (MD013, 300 characters).
+REPORT_WRAP = 200
+VAULT_OPS_NOTE = "**Policies, Sentinel, entities, client counts and cluster health:** not reviewed here; use the vault-ops skill."
+
+
+def md_escape(value: Any) -> str:
+    """Make a value safe for a table cell: a pipe would end the cell and a newline the row."""
+    text = "" if value is None else str(value)
+    return text.replace("\\", "\\\\").replace("|", "\\|").replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
+
+
+def md_table(headers: list[str], rows: list[list[Any]]) -> str:
+    if not rows:
+        return "_No entries._"
+    lines = ["| " + " | ".join(md_escape(h) for h in headers) + " |", "| " + " | ".join("---" for _ in headers) + " |"]
+    lines += ["| " + " | ".join(md_escape(cell) for cell in row) + " |" for row in rows]
+    return "\n".join(lines)
+
+
+def md_wrap(text: str, indent: str = "") -> str:
+    return textwrap.fill(text, REPORT_WRAP, subsequent_indent=indent, break_long_words=False, break_on_hyphens=False)
+
+
+def md_bullets(items: list[str]) -> str:
+    return "\n".join(md_wrap(f"- {item}", "  ") for item in items)
+
+
+def plural(n: int, word: str) -> str:
+    return f"{n} {word}" if n == 1 else f"{n} {word}s"
+
+
+def load_diff_document(source: str) -> dict[str, Any]:
+    try:
+        document = json.loads(Path(source).expanduser().read_text())
+    except FileNotFoundError:
+        raise SystemExit(f"error: file not found: {source}") from None
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"error: {source} is not a JSON file: {exc}") from None
+    if not (isinstance(document, dict) and isinstance(document.get("runs"), dict) and isinstance(document.get("summary"), dict) and isinstance(document.get("findings"), dict)):
+        raise SystemExit(f"error: {source} is not a vault-posture diff document")
+    return document
+
+
+def merge_documents(documents: list[dict[str, Any]]) -> dict[str, Any]:
+    """One view of several result files from the same cluster: findings once each, coverage combined, newest data per area."""
+    clusters = sorted({str(d["run"].get("cluster_name")) for d in documents})
+    if len(clusters) > 1:
+        raise SystemExit(f"error: the files describe different clusters ({', '.join(clusters)}): report one cluster at a time")
+    by_time = sorted(documents, key=lambda d: str(d["run"].get("generated_at") or ""))
+    newest = by_time[-1]["run"]
+    findings: dict[str, dict[str, Any]] = {}
+    scopes: dict[tuple[str, ...], dict[str, Any]] = {}
+    data: dict[str, Any] = {}
+    for document in by_time:
+        for f in document["findings"]:
+            findings.setdefault(f["fingerprint"], f)
+        for scope in (document.get("coverage") or {}).get("scopes") or []:
+            scopes[(scope.get("namespace", "/"), scope.get("scope", ""), scope.get("status", ""))] = scope
+        data.update({k: v for k, v in (document.get("data") or {}).items() if v is not None})
+    runs = [d["run"] for d in by_time]
+    redacted = any(r.get("vault_addr") == "<redacted>" for r in runs)
+    return {
+        "run": {
+            **newest,
+            "vault_addr": "<redacted>" if redacted else newest.get("vault_addr"),
+            "first_generated_at": runs[0].get("generated_at"),
+            "start_namespaces": sorted({str(r.get("start_namespace") or "/") for r in runs}),
+        },
+        "coverage": {"complete": all((d.get("coverage") or {}).get("complete", False) for d in documents), "scopes": list(scopes.values())},
+        "findings": list(findings.values()),
+        "data": data,
+    }
+
+
+def _when(first: Any, last: Any) -> str:
+    start, end = parse_time(first), parse_time(last)
+    if not end:
+        return "unknown"
+    if not start or start == end:
+        return end.strftime("%Y-%m-%d %H:%M UTC")
+    if start.date() == end.date():
+        return f"{start.strftime('%Y-%m-%d %H:%M')}–{end.strftime('%H:%M')} UTC"
+    return f"{start.strftime('%Y-%m-%d %H:%M')} – {end.strftime('%Y-%m-%d %H:%M')} UTC"
+
+
+def _severity_line(findings: list[dict[str, Any]]) -> str:
+    counts = Counter(f.get("severity") for f in findings)
+    parts = [f"{counts[s]} {s}" for s in SEVERITIES if counts[s]]
+    return f"**{len(findings)}**" + (": " + ", ".join(parts) if parts else "")
+
+
+def _scopes(merged: dict[str, Any], *statuses: str) -> list[dict[str, Any]]:
+    return sorted((s for s in merged["coverage"]["scopes"] if s.get("status") in statuses), key=lambda s: (s.get("namespace", ""), s.get("scope", "")))
+
+
+def _scope_list(scopes: list[dict[str, Any]]) -> str:
+    return ", ".join(f"`{s.get('scope')}` (`{s.get('namespace', '/')}`)" for s in scopes)
+
+
+def _header(merged: dict[str, Any]) -> str:
+    run = merged["run"]
+    denied, errors = _scopes(merged, DENIED), _scopes(merged, ERROR)
+    coverage = "**Complete**" if merged["coverage"]["complete"] else f"**Partial**: {plural(len(denied), 'denied read')}, {plural(len(errors), 'error')}"
+    version = run.get("vault_version") or "unknown"
+    if run.get("edition"):
+        version += f" ({str(run['edition']).capitalize()})"
+    rows = [
+        ["Cluster", f"`{run.get('cluster_name')}`"],
+        ["Address", f"`{run.get('vault_addr')}`"],
+        ["Vault version", version],
+        ["Run time", _when(run.get("first_generated_at"), run.get("generated_at"))],
+        ["Start namespace", ", ".join(f"`{n}`" for n in run["start_namespaces"])],
+        ["Coverage", coverage],
+        ["Findings", _severity_line(merged["findings"])],
+        ["Tool", f"{TOOL_NAME} {TOOL_VERSION}"],
+    ]
+    return md_table(["", ""], rows)
+
+
+def group_findings(findings: list[dict[str, Any]], catalogue: Catalogue) -> list[tuple[str, list[dict[str, Any]]]]:
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for f in sorted(findings, key=lambda f: (f.get("namespace", ""), (f.get("object") or {}).get("path") or "")):
+        groups.setdefault(f["rule_id"], []).append(f)
+    return sorted(groups.items(), key=lambda g: (catalogue.rank(g[0]), g[0]))
+
+
+def _title(rule_id: str, group: list[dict[str, Any]]) -> str:
+    return RULES[rule_id].title if rule_id in RULES else str(group[0].get("title") or rule_id)
+
+
+def _severity(rule_id: str, group: list[dict[str, Any]]) -> str:
+    return RULES[rule_id].severity if rule_id in RULES else str(group[0].get("severity") or "info")
+
+
+def _executive_summary(merged: dict[str, Any], groups: list[tuple[str, list[dict[str, Any]]]]) -> str:
+    paragraphs = []
+    if merged["coverage"]["complete"]:
+        paragraphs.append("Coverage is complete: every read succeeded or did not apply to this cluster.")
+    else:
+        counts = f"{plural(len(_scopes(merged, DENIED)), 'denied read')}, {plural(len(_scopes(merged, ERROR)), 'error')}"
+        paragraphs.append(f"**Coverage is incomplete** ({counts}), so every conclusion below is partial. See **Not covered**.")
+    paragraphs.append("This review was read-only and nothing in Vault was changed. Every command below is drafted for an operator to run.")
+    if any(rule_id == "VP-SEC-001" for rule_id, _ in groups):
+        paragraphs.append(
+            "**A root or recovery token generation is in progress** (VP-SEC-001). It may be a planned break-glass ceremony: "
+            "confirm with the key holders, and check the audit log for who started it, before anyone cancels it."
+        )
+    serious = [(r, g) for r, g in groups if r != "VP-SEC-001" and _severity(r, g) in ("high", "medium")]
+    if serious:
+        items = [f"{_title(r, g)} ({r}{', ×' + str(len(g)) if len(g) > 1 else ''})" for r, g in serious[:3]]
+        lead = "The top item" if len(items) == 1 else f"The top {len(items)} items"
+        paragraphs.append(f"{lead} at medium or high severity: {'; '.join(items)}.")
+    if not merged["findings"]:
+        paragraphs.append("No findings were raised.")
+    return "\n\n".join(md_wrap(p) for p in paragraphs)
+
+
+def _role_path(role: dict[str, Any]) -> str | None:
+    source = ROLE_SOURCES.get(str(role.get("type")))
+    return f"auth/{role.get('mount')}{source[0]}/{role.get('name')}" if source else None
+
+
+def _on_off(value: Any) -> str:
+    return "unknown" if value is None else "on" if value else "off"
+
+
+def _summary_metrics(merged: dict[str, Any]) -> str | None:
+    data, rows = merged["data"], []
+    namespaces = sorted({n for area in ("roles", "pki") for n in (data.get(area) or {}).get("namespaces") or []})
+    if namespaces:
+        rows.append(["Namespaces", f"{len(namespaces)} ({', '.join(f'`{n}`' for n in namespaces[:5])}{', …' if len(namespaces) > 5 else ''})"])
+    if (roles := data.get("roles")) is not None:
+        flagged = {(f.get("object") or {}).get("path") for f in merged["findings"]}
+        role_list = roles.get("roles") or []
+        mounts = {(r.get("namespace"), r.get("mount")) for r in role_list}
+        rows.append(["Auth roles reviewed", f"{len(role_list)} on {plural(len(mounts), 'mount')}, {sum(_role_path(r) in flagged for r in role_list)} with findings"])
+    if (pki := data.get("pki")) is not None:
+        rows.append(["PKI mounts / issuers", f"{len(pki.get('mounts') or [])} / {len(pki.get('issuers') or [])}"])
+    if (quotas := data.get("quotas")) is not None:
+        if (rate := quotas.get("rate_limit")) is not None:
+            scoped = [f"`{q.get('path')}`" for q in rate if q.get("path")]
+            rows.append(["Rate-limit quotas", f"{len(rate)}" + (f" (scoped to {', '.join(scoped)})" if scoped else "")])
+        if (lease := quotas.get("lease_count")) is not None:
+            builtin = sum(is_builtin_lease_quota(q) for q in lease)
+            rows.append(["Lease-count quotas", f"{len(lease)}" + (f" ({builtin} built-in `default`, untouched)" if builtin else "")])
+    if (security := data.get("security")) is not None:
+        if (plugins := security.get("external_plugins")) is not None:
+            rows.append(["External plugins", str(len(plugins))])
+        if key := security.get("key_status"):
+            installed = parse_time(key.get("install_time"))
+            rows.append(["Barrier key", f"term {key.get('term')}, installed {installed.strftime('%Y-%m-%d') if installed else 'unknown'}"])
+    return md_table(["Metric", "Value"], rows) if rows else None
+
+
+def _inventory(merged: dict[str, Any]) -> str | None:
+    data, parts = merged["data"], []
+    flagged = {(f.get("object") or {}).get("path") for f in merged["findings"]}
+    if roles := (data.get("roles") or {}).get("roles"):
+        per_mount: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+        for role in roles:
+            per_mount.setdefault((str(role.get("namespace")), str(role.get("mount")), str(role.get("type"))), []).append(role)
+        rows = [
+            [f"`{ns}`", f"`{mount}`", kind, len(rs), sum(_role_path(r) in flagged for r in rs)] for (ns, mount, kind), rs in sorted(per_mount.items(), key=lambda m: (m[0][0], -len(m[1]), m[0][1]))
+        ]
+        parts.append(md_table(["Namespace", "Auth mount", "Type", "Roles", "With findings"], rows))
+        clean = [f"`{r.get('mount')}{r.get('name')}`" for r in roles if _role_path(r) not in flagged]
+        if clean:
+            listed = ", ".join(clean[:10]) + (f" and {len(clean) - 10} more" if len(clean) > 10 else "")
+            parts.append(md_wrap(f"Roles with no findings: {listed}."))
+    if mounts := (data.get("pki") or {}).get("mounts"):
+        issuers = (data.get("pki") or {}).get("issuers") or []
+        rows = []
+        for m in mounts:
+            names = []
+            for i in issuers:
+                if i.get("namespace") == m.get("namespace") and i.get("mount") == m.get("mount"):
+                    cert, name = i.get("certificate") or {}, (i.get("config") or {}).get("issuer_name") or str(i.get("issuer_id", ""))[:8]
+                    expiry = parse_time(cert.get("not_after"))
+                    names.append(f"`{name}`" + (f" (expires {expiry.strftime('%Y-%m-%d')})" if expiry else ""))
+            crl = m.get("crl")
+            revocation = (
+                "unknown"
+                if crl is None
+                else {(False, False): "on", (True, True): "**off**", (True, False): "OCSP only", (False, True): "CRL only"}[(bool(crl.get("disable")), bool(crl.get("ocsp_disable")))]
+            )
+            rows.append(
+                [
+                    f"`{m.get('namespace')}`",
+                    f"`{m.get('mount')}`",
+                    ", ".join(names) or "none",
+                    _on_off((m.get("auto_tidy") or {}).get("enabled") if m.get("auto_tidy") is not None else None),
+                    revocation,
+                ]
+            )
+        parts.append(md_table(["Namespace", "PKI mount", "Issuers", "Auto-tidy", "CRL / OCSP"], rows))
+    return "\n\n".join(parts) if parts else None
+
+
+def _example(f: dict[str, Any]) -> str:
+    path = (f.get("object") or {}).get("path")
+    where = f"`{f.get('namespace', '/')}`" + (f" `{path}`" if path else "")
+    return f"{where}: {f.get('detail', '')}"
+
+
+def render_group(index: int, rule_id: str, group: list[dict[str, Any]], catalogue: Catalogue) -> str:
+    count = f", ×{len(group)}" if len(group) > 1 else ""
+    lines = [f"### {index}. {_title(rule_id, group)} ({rule_id}, {_severity(rule_id, group)}{count})"]
+    entry = catalogue.entries.get(rule_id)
+    if entry and len(group) > 1:
+        lines.append(md_wrap(entry.meaning))
+    shown = group[:REPORT_EXAMPLES]
+    if len(group) == 1:
+        lines.append(md_wrap(_example(group[0])))
+    else:
+        more = [f"…and {len(group) - REPORT_EXAMPLES} more in the result files."] if len(group) > REPORT_EXAMPLES else []
+        lines.append(md_bullets([_example(f) for f in shown] + more))
+    commands: list[str] = []
+    for f in shown:
+        for command in catalogue.commands(rule_id):
+            if (filled := fill_command(command, f)) not in commands:
+                commands.append(filled)
+    guidance = catalogue.guidance(rule_id)
+    if guidance and not commands:
+        lines.append(md_wrap(f"For an operator (no catalogue command): {guidance.removeprefix('No catalogue command: ')}"))
+    elif commands:
+        if guidance:
+            lines.append(md_wrap(f"**Remediation:** {guidance}"))
+        tail = f"\n# …and {len(group) - REPORT_EXAMPLES} more, one per finding" if len(group) > REPORT_EXAMPLES else ""
+        lines += ["For an operator to run:", "```bash\n" + "\n".join(commands) + tail + "\n```"]
+    if entry and entry.caveats:
+        lines.append(md_wrap(f"**Watch out:** {entry.caveats}"))
+    return "\n\n".join(lines)
+
+
+def _changes(diff: dict[str, Any]) -> str:
+    s, old = diff["summary"], (diff.get("runs") or {}).get("old") or {}
+    new_n, resolved_n = (s.get("new") or {}).get("total", 0), (s.get("resolved") or {}).get("total", 0)
+    parts = [md_wrap(f"Compared with the run of {_when(None, old.get('generated_at'))}: **{new_n} new**, **{resolved_n} resolved**, {s.get('unchanged', 0)} unchanged, {s.get('rotated', 0)} rotated.")]
+    items = [f"**Warning:** {w}" for w in diff.get("warnings") or []]
+    for label, key in (("New", "new"), ("Resolved", "resolved")):
+        items += [f"{label}: {f.get('rule_id')} {_example(f)}" for f in (diff["findings"].get(key) or [])[:10]]
+    if s.get("rotated"):
+        items.append(f"Rotated: {plural(s['rotated'], 'PKI finding')} moved to a re-issued CA of the same name; still open, not fixed.")
+    if items:
+        parts.append(md_bullets(items))
+    return "\n\n".join(parts)
+
+
+def _not_covered(merged: dict[str, Any], catalogue: Catalogue) -> str:
+    items = []
+    if catalogue.warning:
+        items.append(f"**Remediation:** {catalogue.warning}; findings show rule titles only.")
+    if denied := _scopes(merged, DENIED):
+        items.append(f"**Denied reads:** {_scope_list(denied)}. Results for these are partial.")
+    for s in _scopes(merged, ERROR):
+        items.append(f"**Error:** `{s.get('scope')}` (`{s.get('namespace', '/')}`){': ' + md_escape(s['detail']) if s.get('detail') else ''}.")
+    if unsupported := _scopes(merged, UNSUPPORTED):
+        items.append(f"**Not available on this edition:** {_scope_list(unsupported)}.")
+    if not_applicable := _scopes(merged, NOT_APPLICABLE):
+        items.append(f"**Not applicable here:** {_scope_list(not_applicable)}.")
+    items.append(VAULT_OPS_NOTE)
+    return md_bullets(items)
+
+
+def render_report(merged: dict[str, Any], catalogue: Catalogue, diff: dict[str, Any] | None = None, sources: list[str] | tuple[str, ...] = ()) -> str:
+    groups = group_findings(merged["findings"], catalogue)
+    sections = [f"# Vault posture report: `{merged['run'].get('cluster_name')}`", _header(merged), "## Executive summary", _executive_summary(merged, groups)]
+    if metrics := _summary_metrics(merged):
+        sections += ["## Summary metrics", metrics]
+    if inventory := _inventory(merged):
+        sections += ["## Inventory", inventory]
+    sections.append("## Findings, ranked")
+    sections += [render_group(i, rule_id, group, catalogue) for i, (rule_id, group) in enumerate(groups, 1)] or ["_No findings._"]
+    summary_rows = [[r, _severity(r, g), len(g), _title(r, g)] for r, g in groups]
+    sections += ["## Summary", md_table(["Rule", "Severity", "Count", "Title"], summary_rows) if summary_rows else "_No findings._"]
+    if diff is not None:
+        sections += ["## Changes since the last run", _changes(diff)]
+    sections += ["## Not covered", _not_covered(merged, catalogue), "## Source files", md_bullets([f"`{s}`" for s in sources]) or "_None._"]
+    return "\n\n".join(sections) + "\n"
 
 
 # --------------------------------------------------------------------------- documents
@@ -1703,21 +2033,24 @@ def security_data(data: SecurityData) -> dict[str, Any]:
     }
 
 
-def write_json(path: Path, document: dict[str, Any]) -> Path:
+def write_text(path: Path, text: str) -> Path:
     if not path.parent.exists():
         path.parent.mkdir(mode=0o700, parents=True)
         (path.parent / ".gitignore").write_text("# vault-posture results are confidential: never commit them\n*\n")
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as handle:
-        json.dump(document, handle, indent=2)
-        handle.write("\n")
+        handle.write(text)
     os.chmod(path, 0o600)
     return path
 
 
-def output_path(output_dir: str, cluster: str, kind: str, ts: datetime) -> Path:
+def write_json(path: Path, document: dict[str, Any]) -> Path:
+    return write_text(path, json.dumps(document, indent=2) + "\n")
+
+
+def output_path(output_dir: str, cluster: str, kind: str, ts: datetime, suffix: str = ".json") -> Path:
     safe = re.sub(r"[^A-Za-z0-9_.-]", "-", cluster) or "vault"
-    return Path(output_dir).expanduser().resolve() / f"{safe}-{kind}-{ts.strftime('%Y%m%d-%H%M%S')}.json"
+    return Path(output_dir).expanduser().resolve() / f"{safe}-{kind}-{ts.strftime('%Y%m%d-%H%M%S')}{suffix}"
 
 
 def exit_code_for(document: dict[str, Any], fail_on: str | None, fail_on_gaps: bool) -> int:
@@ -1783,6 +2116,22 @@ def cmd_diff(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_report(args: argparse.Namespace) -> int:
+    documents = [load_findings_document(source) for source in args.files]
+    diff = load_diff_document(args.diff) if args.diff else None
+    merged = merge_documents(documents)
+    cluster = str(merged["run"].get("cluster_name") or "vault")
+    if diff is not None and (diff_cluster := str(((diff.get("runs") or {}).get("new") or {}).get("cluster_name"))) != cluster:
+        raise SystemExit(f"error: the diff describes cluster {diff_cluster}, the result files {cluster}: report one cluster at a time")
+    catalogue = load_catalogue()
+    if catalogue.warning:
+        log(f"warning: {catalogue.warning}")
+    sources = [Path(s).name for s in dict.fromkeys([*args.files, *([args.diff] if args.diff else [])])]
+    text = render_report(merged, catalogue, diff, sources)
+    print(write_text(output_path(args.output_dir, cluster, "report", utc_now(), ".md"), text))
+    return EXIT_OK
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="vault_posture.py",
@@ -1820,6 +2169,10 @@ def build_parser() -> argparse.ArgumentParser:
     diff.add_argument("old", help="the earlier findings document (audit, roles, pki, quotas or security)")
     diff.add_argument("new", help="the later findings document")
     diff.set_defaults(func=cmd_diff)
+    report = sub.add_parser("report", parents=[common], help="offline: Markdown report from findings documents -> report.md")
+    report.add_argument("files", nargs="+", help="findings documents (audit, roles, pki, quotas or security) from one cluster")
+    report.add_argument("--diff", help="a diff document to add a 'Changes since the last run' section")
+    report.set_defaults(func=cmd_report)
     return parser
 
 

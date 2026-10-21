@@ -16,7 +16,7 @@ Every workflow is a Task target; run `task` to list them. Don't call the scripts
 | Seed findings, mint the read-only token | `task seed`, `task token` |
 | Integration tests against the running server | `task test:integration` |
 | Everything on a fresh server | `task test:e2e` (`task test:e2e:compose` for containers) |
-| Run the skill script by hand | `task skill:run -- audit`, `task skill:access -- --policy tests/fixtures/policies --path secret/data/app/x` |
+| Run the skill script by hand | `task skill:run -- audit`, `task skill:access -- --policy tests/fixtures/policies --path secret/data/app/x`, `task skill:report -- <result.json> ...` |
 | Regenerate the token policies | `task policies` |
 | Plugin manifest check | `task plugin:validate` |
 | Skill evals (spend API credits: ask first) | `task eval` |
