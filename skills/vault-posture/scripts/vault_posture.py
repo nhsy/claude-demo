@@ -37,6 +37,7 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import hashlib
+import ipaddress
 import json
 import os
 import re
@@ -49,6 +50,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
+from urllib.parse import urlsplit
 
 import hvac
 import requests
@@ -222,6 +224,11 @@ ROLE_SOURCES: dict[str, tuple[str, tuple[str, ...]]] = {
 # Mount type -> the role sources read on it, where that isn't just the source of the same name
 # (Enterprise child namespaces report ns_token).
 ROLE_SOURCE_ALIASES: dict[str, tuple[str, ...]] = {"oidc": ("jwt",), "ns_token": ("token",), "ldap": ("ldap_group", "ldap_user")}
+# Auth method type -> fields kept from auth/<mount>config. LDAP bind DNs, certificates and client
+# TLS keys are never kept (Vault does not return bindpass).
+AUTH_CONFIG_FIELDS: dict[str, tuple[str, ...]] = {
+    "ldap": ("url", "starttls", "insecure_tls", "tls_min_version", "deny_null_bind", "discoverdn", "userattr", "case_sensitive_names"),
+}
 ISSUER_FIELDS = ("issuer_name", "leaf_not_after_behavior", "issuing_certificates", "crl_distribution_points", "ocsp_servers", "usage", "revoked")
 AUTO_TIDY_FIELDS = ("enabled", "interval_duration", "tidy_cert_store", "tidy_revoked_certs", "tidy_expired_issuers")
 CRL_FIELDS = ("disable", "ocsp_disable", "auto_rebuild", "enable_delta", "expiry")
@@ -268,6 +275,9 @@ RULES: dict[str, Rule] = {
     "VP-AZURE-001": Rule("medium", "roles", "Azure role accepts any identity in the tenant"),
     "VP-AZURE-002": Rule("low", "roles", "Azure role binds no specific service principal or group"),
     "VP-AZURE-003": Rule("low", "roles", "Azure role binds a resource group or scale set in any subscription"),
+    "VP-LDAP-001": Rule("medium", "roles", "LDAP auth skips TLS certificate verification"),
+    "VP-LDAP-002": Rule("medium", "roles", "LDAP auth sends passwords over unencrypted LDAP"),
+    "VP-LDAP-003": Rule("medium", "roles", "LDAP auth allows unauthenticated binds with an empty password"),
     "VP-CERT-001": Rule("medium", "roles", "Cert auth role accepts any certificate its CA signed"),
     "VP-CERT-002": Rule("medium", "roles", "Cert auth role matches names with a catch-all wildcard"),
     "VP-PKI-001": Rule("high", "pki", "PKI issuer certificate has expired"),
@@ -783,15 +793,35 @@ class AuthRole:
 
 
 @dataclass
+class AuthConfig:
+    namespace: str
+    mount: str
+    type: str  # key of AUTH_CONFIG_FIELDS
+    config: dict[str, Any]
+
+    @property
+    def path(self) -> str:
+        return f"auth/{self.mount}config"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"namespace": display_namespace(self.namespace), "mount": self.mount, "type": self.type, "config": self.config}
+
+
+@dataclass
 class RoleData:
     namespaces: list[str] = field(default_factory=list)
     roles: list[AuthRole] = field(default_factory=list)
+    configs: list[AuthConfig] = field(default_factory=list)
 
 
 def collect_roles(reader: Reader, coverage: Coverage, namespaces: list[str]) -> RoleData:
     data = RoleData(namespaces=namespaces)
     for ns in namespaces:
         for mount, mount_type in sorted(mounts_of(reader, coverage, "auth", ns).items()):
+            if mount_type in AUTH_CONFIG_FIELDS:
+                status, body = attempt(coverage, f"roles.{mount}config", lambda m=mount, n=ns: reader.data(f"auth/{m}config", namespace=n), ns)
+                if status == OK:
+                    data.configs.append(AuthConfig(ns, mount, mount_type, pick(body, AUTH_CONFIG_FIELDS[mount_type])))
             sources = [s for s in ROLE_SOURCE_ALIASES.get(mount_type, (mount_type,)) if s in ROLE_SOURCES]
             for source in sources:
                 segment, fields = ROLE_SOURCES[source]
@@ -948,6 +978,62 @@ def check_roles(data: RoleData) -> list[Finding]:
             found.extend(_check_azure_role(role))
         if role.source == "cert":
             found.extend(_check_cert_role(role))
+    for config in data.configs:
+        if config.type == "ldap":
+            found.extend(_check_ldap_config(config))
+    return found
+
+
+def _config_finding(rule_id: str, config: AuthConfig, detail: str, **evidence: Any) -> Finding:
+    return finding(rule_id, f"{config.type}_config", config.path, detail, namespace=config.namespace, mount=config.mount, **evidence)
+
+
+def _loopback(url: str) -> bool:
+    try:
+        host = urlsplit(url).hostname or ""
+        return host == "localhost" or ipaddress.ip_address(host).is_loopback
+    except ValueError:  # a malformed URL or a host name
+        return False
+
+
+def _plaintext_ldap_urls(url: Any) -> list[str]:
+    # url is a comma-separated list tried in order; loopback traffic never crosses the network
+    # (a fresh, unconfigured mount reports ldap://127.0.0.1).
+    urls = [u.strip() for u in str(url or "").split(",") if u.strip()]
+    return [u for u in urls if u.lower().startswith("ldap://") and not _loopback(u)]
+
+
+def _check_ldap_config(config: AuthConfig) -> list[Finding]:
+    found: list[Finding] = []
+    c = config.config
+    if c.get("insecure_tls"):
+        found.append(
+            _config_finding(
+                "VP-LDAP-001",
+                config,
+                f"LDAP mount '{config.mount}' skips TLS certificate checks (insecure_tls): an interceptor can pose as the directory and read passwords.",
+                url=c.get("url"),
+                starttls=c.get("starttls"),
+            )
+        )
+    plaintext = _plaintext_ldap_urls(c.get("url"))
+    if plaintext and not c.get("starttls"):
+        found.append(
+            _config_finding(
+                "VP-LDAP-002",
+                config,
+                f"LDAP mount '{config.mount}' uses unencrypted LDAP without StartTLS: login and bind passwords cross the network in clear text.",
+                plaintext_urls=plaintext,
+            )
+        )
+    if c.get("deny_null_bind") is False:
+        found.append(
+            _config_finding(
+                "VP-LDAP-003",
+                config,
+                f"LDAP mount '{config.mount}' allows empty-password logins (deny_null_bind=false): if the directory allows anonymous binds, anyone logs in.",
+            )
+        )
     return found
 
 
@@ -1152,7 +1238,7 @@ def _check_azure_role(role: AuthRole) -> list[Finding]:
 
 
 def roles_data(data: RoleData) -> dict[str, Any]:
-    return {"namespaces": [display_namespace(n) for n in data.namespaces], "roles": [r.to_dict() for r in data.roles]}
+    return {"namespaces": [display_namespace(n) for n in data.namespaces], "roles": [r.to_dict() for r in data.roles], "configs": [c.to_dict() for c in data.configs]}
 
 
 # --------------------------------------------------------------------------- pki

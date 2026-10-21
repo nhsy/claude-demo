@@ -71,6 +71,12 @@ NAMESPACE_RULES = [
     (None, "auth/{m}groups/+", ["read"]),
     (None, "auth/{m}users/", ["list"]),
     (None, "auth/{m}users/+", ["read"]),
+    # Read on every auth method, though only LDAP mounts are read: mount names are free. Checked on
+    # Vault 2.1: no built-in method returns a secret here (LDAP omits bindpass, JWT the OIDC client
+    # secret, Kubernetes the reviewer JWT, GCP the private key, Azure the client secret, Okta the
+    # API token, RADIUS the shared secret, CF the password; by source, Kerberos the keytab, and GitHub
+    # stores no token); AWS keeps its keys under config/client. Third-party plugins can't be checked.
+    ("Auth method config (the script keeps LDAP connection settings only, never binddn or certificates)", "auth/{m}config", ["read"]),
     ("Token roles", "auth/token/roles/", ["list"]),
     (None, "auth/token/roles/+", ["read"]),
 ]

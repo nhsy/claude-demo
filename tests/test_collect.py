@@ -1,5 +1,7 @@
 """Collectors: coverage classification and field allowlisting, driven by a FakeReader."""
 
+import json
+
 import pytest
 import requests
 import vault_posture as vp
@@ -234,6 +236,38 @@ def test_collect_roles_reads_ldap_group_and_user_mappings():
     ]
     # A group and a user of the same name get scopes of their own.
     assert coverage.status("roles.ldap/groups/admins") == coverage.status("roles.ldap/users/admins") == vp.OK
+
+
+def test_collect_roles_reads_ldap_config_without_bind_credentials():
+    body = {
+        "url": "ldap://ldap.example.com",
+        "starttls": False,
+        "insecure_tls": True,
+        "deny_null_bind": False,
+        "userattr": "uid",
+        "binddn": "cn=vault,dc=example,dc=com",
+        "bindpass": "BINDPASS-must-never-appear",
+        "certificate": "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n",
+        "client_tls_cert": "-----BEGIN CERTIFICATE-----\nMIIC\n-----END CERTIFICATE-----\n",
+        "client_tls_key": "CLIENT-TLS-KEY-must-never-appear",
+    }
+    routes = {("sys/auth", False): mounts(ldap="ldap", jwt="jwt"), ("auth/ldap/config", False): ok(body)}
+    coverage = vp.Coverage()
+    data = vp.collect_roles(FakeReader(routes), coverage, [""])
+    assert [(c.mount, c.type, c.path) for c in data.configs] == [("ldap/", "ldap", "auth/ldap/config")]
+    assert data.configs[0].config == {"url": "ldap://ldap.example.com", "starttls": False, "insecure_tls": True, "deny_null_bind": False, "userattr": "uid"}
+    assert coverage.status("roles.ldap/config") == vp.OK
+    assert coverage.status("roles.jwt/config") is None  # only LDAP config is read
+    written = json.dumps(vp.roles_data(data))
+    assert "must-never-appear" not in written and "BEGIN" not in written and "dc=example" not in written
+
+
+def test_collect_roles_denied_ldap_config_is_a_gap():
+    routes = {("sys/auth", False): mounts(ldap="ldap"), ("auth/ldap/config", False): hvac_exc.Forbidden()}
+    coverage = vp.Coverage()
+    data = vp.collect_roles(FakeReader(routes), coverage, [""])
+    assert data.configs == []
+    assert coverage.status("roles.ldap/config") == vp.DENIED and not coverage.complete
 
 
 def test_collect_roles_denied_role_body_is_a_gap():

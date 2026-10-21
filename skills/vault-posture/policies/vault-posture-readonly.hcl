@@ -530,6 +530,62 @@ path "+/+/+/+/+/auth/+/+/+/users/+" {
   capabilities = ["read"]
 }
 
+# Auth method config (the script keeps LDAP connection settings only, never binddn or certificates)
+path "auth/+/config" {
+  capabilities = ["read"]
+}
+path "auth/+/+/config" {
+  capabilities = ["read"]
+}
+path "auth/+/+/+/config" {
+  capabilities = ["read"]
+}
+path "+/auth/+/config" {
+  capabilities = ["read"]
+}
+path "+/auth/+/+/config" {
+  capabilities = ["read"]
+}
+path "+/auth/+/+/+/config" {
+  capabilities = ["read"]
+}
+path "+/+/auth/+/config" {
+  capabilities = ["read"]
+}
+path "+/+/auth/+/+/config" {
+  capabilities = ["read"]
+}
+path "+/+/auth/+/+/+/config" {
+  capabilities = ["read"]
+}
+path "+/+/+/auth/+/config" {
+  capabilities = ["read"]
+}
+path "+/+/+/auth/+/+/config" {
+  capabilities = ["read"]
+}
+path "+/+/+/auth/+/+/+/config" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/auth/+/config" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/auth/+/+/config" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/auth/+/+/+/config" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/+/auth/+/config" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/+/auth/+/+/config" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/+/auth/+/+/+/config" {
+  capabilities = ["read"]
+}
+
 # Token roles
 path "auth/token/roles/" {
   capabilities = ["list"]
