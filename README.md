@@ -54,6 +54,7 @@ task dev:up seed token       # local `vault server -dev` on :8250, seed findings
 task test:integration        # live tests with the read-only token
 task skill:run -- audit      # run the script by hand
 task skill:access -- --policy tests/fixtures/policies --path secret/data/app/x --capability update
+task skill:report -- .tmp/vault-posture/*-posture-*.json   # Markdown report from result files
 task dev:down
 task test:e2e                # all of the above on a fresh local dev server
 task lint                    # ruff, shellcheck, gitleaks, yaml/json
@@ -75,6 +76,7 @@ All are in-memory dev servers with root token `root`. `task seed` (`scripts/seed
 | `tests/test_roles.py`, `tests/test_pki.py` | Role and PKI rules, expiry windows, certificate parsing |
 | `tests/test_access.py` | Policy parsing (HCL, JSON, legacy) and ACL evaluation against results captured from Vault |
 | `tests/test_diff.py` | Comparing two runs: new / resolved / unchanged, rotated PKI issuers, mismatch and coverage warnings, schema validation |
+| `tests/test_report.py` | Parsing `rules.md` (commands, ranking, placeholders), the Markdown report: sections, ranking, de-duplication, coverage, `--diff`, offline CLI and its errors |
 | `tests/test_collect.py` | Coverage classification, namespace walking, field allowlisting |
 | `tests/test_readonly.py` | Through real hvac/requests with the transport patched: only GET is sent, namespaces go in the header, no token or secret reaches output |
 | `tests/test_cli.py` | Output files (0600, `.gitignore`), exit codes, setup errors, schema validation |

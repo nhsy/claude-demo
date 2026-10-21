@@ -93,6 +93,11 @@ tasks:
     cmds:
       - uv run --script {{.SKILL_SCRIPT}} access {{.CLI_ARGS | default "--help"}}
 
+  skill:report:
+    desc: "Offline Markdown report from result files, no Vault: task skill:report -- <result.json> [...] [--diff <diff.json>]"
+    cmds:
+      - uv run --script {{.SKILL_SCRIPT}} report {{.CLI_ARGS | default "--help"}}
+
   policies:
     desc: Regenerate the read-only policy files from scripts/gen_policies.py
     cmds:

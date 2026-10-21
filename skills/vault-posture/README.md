@@ -69,6 +69,7 @@ claude
 | `audit` | all of the above | One combined file |
 | `access` | none (offline) | Effective capabilities of ACL policy files on paths, evaluated with Vault's own matching rules |
 | `diff` | none (offline) | New, resolved and unchanged findings between two result files, by fingerprint |
+| `report` | none (offline) | A Markdown report from one or more result files of one cluster, with the drafted fixes from `references/rules.md` filled in |
 
 Every rule, with its meaning and a drafted fix, is in [`references/rules.md`](references/rules.md).
 
