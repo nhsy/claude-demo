@@ -312,6 +312,224 @@ path "+/+/+/+/+/auth/+/+/+/certs/+" {
   capabilities = ["read"]
 }
 
+# LDAP auth group and user -> policy mappings
+path "auth/+/groups/" {
+  capabilities = ["list"]
+}
+path "auth/+/+/groups/" {
+  capabilities = ["list"]
+}
+path "auth/+/+/+/groups/" {
+  capabilities = ["list"]
+}
+path "+/auth/+/groups/" {
+  capabilities = ["list"]
+}
+path "+/auth/+/+/groups/" {
+  capabilities = ["list"]
+}
+path "+/auth/+/+/+/groups/" {
+  capabilities = ["list"]
+}
+path "+/+/auth/+/groups/" {
+  capabilities = ["list"]
+}
+path "+/+/auth/+/+/groups/" {
+  capabilities = ["list"]
+}
+path "+/+/auth/+/+/+/groups/" {
+  capabilities = ["list"]
+}
+path "+/+/+/auth/+/groups/" {
+  capabilities = ["list"]
+}
+path "+/+/+/auth/+/+/groups/" {
+  capabilities = ["list"]
+}
+path "+/+/+/auth/+/+/+/groups/" {
+  capabilities = ["list"]
+}
+path "+/+/+/+/auth/+/groups/" {
+  capabilities = ["list"]
+}
+path "+/+/+/+/auth/+/+/groups/" {
+  capabilities = ["list"]
+}
+path "+/+/+/+/auth/+/+/+/groups/" {
+  capabilities = ["list"]
+}
+path "+/+/+/+/+/auth/+/groups/" {
+  capabilities = ["list"]
+}
+path "+/+/+/+/+/auth/+/+/groups/" {
+  capabilities = ["list"]
+}
+path "+/+/+/+/+/auth/+/+/+/groups/" {
+  capabilities = ["list"]
+}
+path "auth/+/groups/+" {
+  capabilities = ["read"]
+}
+path "auth/+/+/groups/+" {
+  capabilities = ["read"]
+}
+path "auth/+/+/+/groups/+" {
+  capabilities = ["read"]
+}
+path "+/auth/+/groups/+" {
+  capabilities = ["read"]
+}
+path "+/auth/+/+/groups/+" {
+  capabilities = ["read"]
+}
+path "+/auth/+/+/+/groups/+" {
+  capabilities = ["read"]
+}
+path "+/+/auth/+/groups/+" {
+  capabilities = ["read"]
+}
+path "+/+/auth/+/+/groups/+" {
+  capabilities = ["read"]
+}
+path "+/+/auth/+/+/+/groups/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/auth/+/groups/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/auth/+/+/groups/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/auth/+/+/+/groups/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/auth/+/groups/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/auth/+/+/groups/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/auth/+/+/+/groups/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/+/auth/+/groups/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/+/auth/+/+/groups/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/+/auth/+/+/+/groups/+" {
+  capabilities = ["read"]
+}
+path "auth/+/users/" {
+  capabilities = ["list"]
+}
+path "auth/+/+/users/" {
+  capabilities = ["list"]
+}
+path "auth/+/+/+/users/" {
+  capabilities = ["list"]
+}
+path "+/auth/+/users/" {
+  capabilities = ["list"]
+}
+path "+/auth/+/+/users/" {
+  capabilities = ["list"]
+}
+path "+/auth/+/+/+/users/" {
+  capabilities = ["list"]
+}
+path "+/+/auth/+/users/" {
+  capabilities = ["list"]
+}
+path "+/+/auth/+/+/users/" {
+  capabilities = ["list"]
+}
+path "+/+/auth/+/+/+/users/" {
+  capabilities = ["list"]
+}
+path "+/+/+/auth/+/users/" {
+  capabilities = ["list"]
+}
+path "+/+/+/auth/+/+/users/" {
+  capabilities = ["list"]
+}
+path "+/+/+/auth/+/+/+/users/" {
+  capabilities = ["list"]
+}
+path "+/+/+/+/auth/+/users/" {
+  capabilities = ["list"]
+}
+path "+/+/+/+/auth/+/+/users/" {
+  capabilities = ["list"]
+}
+path "+/+/+/+/auth/+/+/+/users/" {
+  capabilities = ["list"]
+}
+path "+/+/+/+/+/auth/+/users/" {
+  capabilities = ["list"]
+}
+path "+/+/+/+/+/auth/+/+/users/" {
+  capabilities = ["list"]
+}
+path "+/+/+/+/+/auth/+/+/+/users/" {
+  capabilities = ["list"]
+}
+path "auth/+/users/+" {
+  capabilities = ["read"]
+}
+path "auth/+/+/users/+" {
+  capabilities = ["read"]
+}
+path "auth/+/+/+/users/+" {
+  capabilities = ["read"]
+}
+path "+/auth/+/users/+" {
+  capabilities = ["read"]
+}
+path "+/auth/+/+/users/+" {
+  capabilities = ["read"]
+}
+path "+/auth/+/+/+/users/+" {
+  capabilities = ["read"]
+}
+path "+/+/auth/+/users/+" {
+  capabilities = ["read"]
+}
+path "+/+/auth/+/+/users/+" {
+  capabilities = ["read"]
+}
+path "+/+/auth/+/+/+/users/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/auth/+/users/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/auth/+/+/users/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/auth/+/+/+/users/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/auth/+/users/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/auth/+/+/users/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/auth/+/+/+/users/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/+/auth/+/users/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/+/auth/+/+/users/+" {
+  capabilities = ["read"]
+}
+path "+/+/+/+/+/auth/+/+/+/users/+" {
+  capabilities = ["read"]
+}
+
 # Token roles
 path "auth/token/roles/" {
   capabilities = ["list"]

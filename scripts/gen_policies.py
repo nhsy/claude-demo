@@ -67,6 +67,10 @@ NAMESPACE_RULES = [
     (None, "auth/{m}role/+", ["read"]),
     ("Cert auth roles (certs/<name>; the script drops the trusted CA certificate)", "auth/{m}certs/", ["list"]),
     (None, "auth/{m}certs/+", ["read"]),
+    ("LDAP auth group and user -> policy mappings", "auth/{m}groups/", ["list"]),
+    (None, "auth/{m}groups/+", ["read"]),
+    (None, "auth/{m}users/", ["list"]),
+    (None, "auth/{m}users/+", ["read"]),
     ("Token roles", "auth/token/roles/", ["list"]),
     (None, "auth/token/roles/+", ["read"]),
 ]

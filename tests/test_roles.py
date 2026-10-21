@@ -26,6 +26,20 @@ def test_root_policy_fires_001(source, config):
     assert ids([role(source, config)]) == ["VP-ROLE-001"]
 
 
+@pytest.mark.parametrize(("source", "segment"), [("ldap_group", "groups"), ("ldap_user", "users")])
+def test_ldap_mapping_to_root_fires_001(source, segment):
+    (f,) = vp.check_roles(vp.RoleData(roles=[role(source, {"policies": ["default", "root"]}, name="admins", mount="ldap/")]))
+    assert f.rule_id == "VP-ROLE-001"
+    assert (f.object_kind, f.object_path) == (f"{source}_role", f"auth/ldap/{segment}/admins")
+    assert f.evidence["policies"] == ["default", "root"]
+
+
+@pytest.mark.parametrize("source", ["ldap_group", "ldap_user"])
+def test_ldap_mapping_without_root_is_quiet(source):
+    # A user in a root-mapped group is not flagged again: the group's finding covers it.
+    assert ids([role(source, {"policies": ["app"], "groups": "admins"}, mount="ldap/")]) == []
+
+
 def test_token_role_without_root_is_quiet():
     assert ids([role("token", {"allowed_policies": ["app"], "allowed_policies_glob": ["team-*"], "orphan": True})]) == []
 
