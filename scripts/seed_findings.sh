@@ -16,6 +16,8 @@
 # auth/<mount>config, and the integration tests check none of them comes back.
 #   VP-PKI-002..006/008  short-lived issuers, no AIA URLs, auto-tidy off, CRL+OCSP off, leaf_not_after=permit
 # auth/k8s/prod/ and ca/int/ (two-segment mounts) show the policies reach deeper mount paths.
+# Enterprise only: namespaces team-a/, team-a/prod/ and team-a/prod/eu/, with one firing object at each
+# level (VP-ROLE-007, VP-ROLE-005, VP-PKI-002/004), show the per-level grants reach every depth.
 # Unit tests cover what a dev server can't show: VP-QUOTA-001 (conflicts with 003), VP-SEC-003
 # (year-old key), VP-PKI-001 (expired issuer) and VP-PKI-007 (Vault refuses weak keys). Idempotent.
 set -euo pipefail
@@ -126,4 +128,32 @@ fi
 vault patch pki/issuer/critical leaf_not_after_behavior=permit >/dev/null  # patch: a write would reset issuer_name
 write pki_off/config/crl disable=true ocsp_disable=true
 
-echo "Seeded ${VAULT_ADDR}: rate-limit quota on auth/userpass/, external plugin posture-dummy, generate-root and rekey in progress, auth roles (also under auth/k8s/prod/) and LDAP config, PKI issuers (also under ca/int/)"
+# ---- Enterprise namespaces: each seed_* runs with VAULT_NAMESPACE set, which the helpers above follow.
+# ns_create <name> [parent]
+ns_create() { VAULT_NAMESPACE="${2:-}" vault namespace lookup "$1" >/dev/null 2>&1 || VAULT_NAMESPACE="${2:-}" vault namespace create "$1" >/dev/null; }
+seed_team_a() {
+  enable_auth approle
+  write auth/approle/role/team-a-role-id-only bind_secret_id=false secret_id_bound_cidrs=10.0.0.0/8 token_policies=app
+}
+seed_team_a_prod() {
+  enable_auth kubernetes
+  write auth/kubernetes/role/prod-any-pod bound_service_account_names='*' bound_service_account_namespaces='*' token_policies=app
+}
+seed_team_a_prod_eu() {
+  enable_pki pki  # auto-tidy stays off (VP-PKI-004)
+  if ! vault list pki/issuers >/dev/null 2>&1; then
+    write pki/root/generate/internal common_name="posture eu CA" issuer_name=eu-short ttl=240h
+  fi
+}
+namespaces=""
+if vault status -format=json | jq -e '.version | contains("+ent")' >/dev/null; then
+  ns_create team-a
+  ns_create prod team-a
+  ns_create eu team-a/prod
+  VAULT_NAMESPACE=team-a seed_team_a
+  VAULT_NAMESPACE=team-a/prod seed_team_a_prod
+  VAULT_NAMESPACE=team-a/prod/eu seed_team_a_prod_eu
+  namespaces=", namespaces team-a/ team-a/prod/ team-a/prod/eu/"
+fi
+
+echo "Seeded ${VAULT_ADDR}: rate-limit quota on auth/userpass/, external plugin posture-dummy, generate-root and rekey in progress, auth roles (also under auth/k8s/prod/) and LDAP config, PKI issuers (also under ca/int/)${namespaces}"
