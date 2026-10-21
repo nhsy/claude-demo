@@ -55,6 +55,11 @@ path "sys/plugins/catalog" {
   capabilities = ["read"]
 }
 
+# Audit devices: Vault requires sudo even to list them (sudo on a GET changes nothing)
+path "sys/audit" {
+  capabilities = ["read", "sudo"]
+}
+
 # ---- every namespace level
 
 # Namespace discovery

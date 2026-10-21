@@ -116,6 +116,7 @@ COMMUNITY_ROUTES = {
             "detailed": [plugin("approle", "auth"), plugin("kv"), plugin("custom-db", "database", version="", builtin=False)],
         }
     ),
+    ("sys/audit", False): ok({"file/": {"type": "file", "description": "", "local": False, "path": "file/", "options": {"file_path": "/var/log/vault/audit.log", "hmac_accessor": "true"}}}),
     ("sys/namespaces", True): enterprise_only(),
     ("sys/auth", False): mounts(token="token", jwt="jwt", kubernetes="kubernetes", userpass="userpass"),
     ("auth/token/roles", True): not_found(),

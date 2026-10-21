@@ -103,6 +103,9 @@ ATTEMPT_FIELDS = ("started", "progress", "required")
 KEY_STATUS_FIELDS = ("term", "install_time", "encryptions")
 ROTATE_FIELDS = ("enabled", "interval", "max_operations")
 PLUGIN_FIELDS = ("name", "type", "version", "builtin", "deprecation_status")
+# Audit devices: never file_path, address, socket or syslog settings, prefix or Enterprise filters.
+AUDIT_DEVICE_FIELDS = ("type", "local")
+AUDIT_OPTION_FIELDS = ("log_raw", "hmac_accessor", "elide_list_responses", "fallback")
 TOKEN_PARAM_FIELDS = (
     "token_policies",
     "token_ttl",
@@ -656,6 +659,7 @@ class SecurityData:
     key_status: dict[str, Any] | None = None
     rotate_config: dict[str, Any] | None = None
     plugins: list[dict[str, Any]] | None = None
+    audit_devices: list[dict[str, Any]] | None = None
 
 
 SECURITY_READS = {
@@ -678,6 +682,14 @@ def collect_security(reader: Reader, coverage: Coverage) -> SecurityData:
     status, catalog = attempt(coverage, "security.plugin_catalog", lambda: reader.data("sys/plugins/catalog"))
     if status == OK:
         data.plugins = [pick(p, PLUGIN_FIELDS) for p in catalog.get("detailed") or [] if isinstance(p, dict)]
+    # Root namespace only (child namespaces answer 404), and Vault wants sudo even to list them.
+    status, devices = attempt(coverage, "security.audit_devices", lambda: reader.data("sys/audit"))
+    if status == OK:
+        data.audit_devices = [
+            {"path": path, **pick(device, AUDIT_DEVICE_FIELDS), "options": pick(device.get("options"), AUDIT_OPTION_FIELDS)}
+            for path, device in sorted(devices.items())
+            if isinstance(device, dict) and path.endswith("/")
+        ]
     return data
 
 
@@ -2125,6 +2137,7 @@ def security_data(data: SecurityData) -> dict[str, Any]:
         "key_status": data.key_status,
         "rotate_config": data.rotate_config,
         "external_plugins": [p for p in data.plugins or [] if p.get("builtin") is False] if data.plugins is not None else None,
+        "audit_devices": data.audit_devices,
     }
 
 

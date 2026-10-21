@@ -57,6 +57,7 @@ ROOT_RULES = [
     ("Barrier key and plugins", "sys/key-status", ["read"]),
     (None, "sys/rotate/config", ["read"]),
     (None, "sys/plugins/catalog", ["read"]),
+    ("Audit devices: Vault requires sudo even to list them (sudo on a GET changes nothing)", "sys/audit", ["read", "sudo"]),
 ]
 
 # Per namespace level.
