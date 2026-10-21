@@ -28,6 +28,7 @@ SEEDED_RULES = {
     *(f"VP-AZURE-00{i}" for i in range(1, 4)),
     "VP-CERT-001",
     "VP-CERT-002",
+    *(f"VP-LDAP-00{i}" for i in range(1, 4)),
     "VP-PKI-002",
     "VP-PKI-003",
     "VP-PKI-004",
@@ -50,6 +51,7 @@ SEEDED_CONTROLS = [
     ("VP-AZURE-003", "auth/azure/role/pinned"),
     ("VP-CERT-001", "auth/cert/certs/scoped"),
     ("VP-CERT-002", "auth/cert/certs/scoped"),
+    ("VP-ROLE-001", "auth/ldap/groups/devs"),
 ]
 
 
@@ -114,6 +116,8 @@ def test_seeded_role_and_pki_details(posture):
     assert ("VP-AZURE-003", "auth/azure/role/rg-any-group") in by_path
     assert ("VP-CERT-001", "auth/cert/certs/any-cert") in by_path
     assert ("VP-CERT-002", "auth/cert/certs/wild") in by_path
+    assert ("VP-ROLE-001", "auth/ldap/groups/admins") in by_path
+    assert {("VP-LDAP-001", "auth/ldap/config"), ("VP-LDAP-002", "auth/ldap/config"), ("VP-LDAP-003", "auth/ldap/config")} <= by_path
     assert ("VP-PKI-006", "pki_off/") in by_path
     # Two-segment mounts are read with the read-only token too.
     assert ("VP-ROLE-005", "auth/k8s/prod/role/any-pod") in by_path
@@ -122,6 +126,7 @@ def test_seeded_role_and_pki_details(posture):
     expiring = next(f for f in posture["findings"] if f["rule_id"] == "VP-PKI-002")
     assert expiring["evidence"]["issuer_name"] == "critical"
     assert "BEGIN CERTIFICATE" not in json.dumps(posture)
+    assert "posture-bind" not in json.dumps(posture)  # the LDAP bind DN is never kept
 
 
 def test_seeded_plugin_and_quota_details(posture):
@@ -129,6 +134,25 @@ def test_seeded_plugin_and_quota_details(posture):
     assert plugin["object"]["path"] == "secret/posture-dummy"
     scoped = next(f for f in posture["findings"] if f["rule_id"] == "VP-QUOTA-003")
     assert scoped["evidence"]["paths"] == ["auth/userpass/"]
+
+
+# The base policy grants read on every auth/<mount>config (scripts/gen_policies.py). The seed writes
+# fake secrets into these; Vault must never return them, or the grant exposes them.
+@pytest.mark.parametrize(
+    ("path", "field", "marker"),
+    [
+        ("auth/jwt/config", "oidc_client_secret", None),  # not seeded: it needs a reachable discovery URL
+        ("auth/kubernetes/config", "token_reviewer_jwt", "FAKE-REVIEWER-JWT-must-never-appear"),
+        ("auth/gcp/config", "private_key", "FAKE-GCP-KEY-must-never-appear"),
+        ("auth/azure/config", "client_secret", "FAKE-AZURE-SECRET-must-never-appear"),
+        ("auth/ldap/config", "bindpass", "FAKE-LDAP-BINDPASS-must-never-appear"),
+    ],
+)
+def test_readonly_token_reads_no_auth_config_secrets(live, path, field, marker):
+    data = live.read(path)["data"]
+    assert field not in data
+    if marker:
+        assert marker not in json.dumps(data)
 
 
 def test_no_seal_operation_secrets_in_output(posture):
