@@ -27,6 +27,7 @@ Complements the vault-ops skill (health, inventory, policies, usage): rule IDs a
 #
 # [tool.uv]
 # exclude-newer = "2026-10-05T00:00:00Z"
+# exclude-newer-package = { certifi = "2026-10-21T00:00:00Z" }
 # ///
 
 from __future__ import annotations
