@@ -82,7 +82,11 @@ def test_seeded_rules_fire(posture):
     enterprise = posture["run"]["edition"] == "enterprise"
     assert ("VP-QUOTA-002" in fired) is enterprise
     status = {s["scope"]: s["status"] for s in posture["coverage"]["scopes"]}
-    assert status["quotas.lease-count"] == ("absent" if enterprise else "unsupported")
+    # Enterprise lists its built-in default lease-count quota, which VP-QUOTA-002 doesn't count.
+    assert status["quotas.lease-count"] == ("ok" if enterprise else "unsupported")
+    if enterprise:
+        lease = next(f for f in posture["findings"] if f["rule_id"] == "VP-QUOTA-002")
+        assert lease["evidence"] == {"builtin_default": True, "max_leases": 300000}
 
 
 def test_seeded_controls_stay_quiet(posture):

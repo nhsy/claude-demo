@@ -569,12 +569,36 @@ def collect_quotas(reader: Reader, coverage: Coverage) -> QuotaData:
     )
 
 
+# Enterprise 1.16+ creates this global lease-count quota on every new install. Untouched, it
+# is Vault's default rather than an operator's limit, so it doesn't count as a quota.
+BUILTIN_LEASE_QUOTA_NAME = "default"
+BUILTIN_LEASE_QUOTA_MAX = 300000
+
+
+def is_builtin_lease_quota(quota: dict[str, Any]) -> bool:
+    return quota.get("name") == BUILTIN_LEASE_QUOTA_NAME and (quota.get("path") or "") == "" and quota.get("max_leases") == BUILTIN_LEASE_QUOTA_MAX
+
+
 def check_quotas(data: QuotaData) -> list[Finding]:
     found: list[Finding] = []
     for kind, quotas, rule in (("rate-limit", data.rate_limit, "VP-QUOTA-001"), ("lease-count", data.lease_count, "VP-QUOTA-002")):
         if quotas is None:
             continue  # not judged: unreadable or Enterprise-only on Community
-        if not quotas:
+        builtin = kind == "lease-count" and any(is_builtin_lease_quota(q) for q in quotas)
+        if builtin:
+            quotas = [q for q in quotas if not is_builtin_lease_quota(q)]
+        if not quotas and builtin:
+            found.append(
+                finding(
+                    rule,
+                    "quota_type",
+                    kind,
+                    f"Only Vault's built-in default {kind} quota ({BUILTIN_LEASE_QUOTA_MAX} leases) is defined; no operator has set a limit.",
+                    builtin_default=True,
+                    max_leases=BUILTIN_LEASE_QUOTA_MAX,
+                )
+            )
+        elif not quotas:
             found.append(finding(rule, "quota_type", kind, f"No {kind} quota is defined anywhere in the cluster."))
         elif not any((q.get("path") or "") == "" for q in quotas):
             paths = sorted({q.get("path") or "" for q in quotas})
