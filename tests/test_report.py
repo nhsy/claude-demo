@@ -136,7 +136,11 @@ PKI_DATA = {
     ],
 }
 QUOTA_DATA = {"config": {}, "rate_limit": [{"name": "login", "path": "auth/userpass/"}], "lease_count": [{"name": "default", "path": "", "max_leases": 300000}]}
-SECURITY_DATA = {"external_plugins": [{"name": "x"}], "key_status": {"term": 2, "install_time": "2026-01-01T00:00:00.123456789Z"}}
+SECURITY_DATA = {
+    "external_plugins": [{"name": "x"}],
+    "key_status": {"term": 2, "install_time": "2026-01-01T00:00:00.123456789Z"},
+    "audit_devices": [{"path": "file/", "type": "file", "local": False, "options": {}}],
+}
 
 
 def document(findings, *, at=NOW, cluster="vault-a", scopes=(("mounts", vp.OK, ""),), data=None, addr="https://vault.example:8200"):
@@ -339,6 +343,9 @@ def test_summary_metrics_and_inventory():
     assert "| Rate-limit quotas | 1 (scoped to `auth/userpass/`) |" in text
     assert "| Lease-count quotas | 1 (1 built-in `default`, untouched) |" in text
     assert "| External plugins | 1 |" in text and "| Barrier key | term 2, installed 2026-01-01 |" in text
+    assert "| Audit devices | `file/` (file) |" in text
+    no_devices = render([document([ROOT], data={"security": {**SECURITY_DATA, "audit_devices": []}})])
+    assert "| Audit devices | none |" in no_devices
     assert "| `/` | `jwt/` | jwt | 2 | 1 |" in text and "| `/` | `token/` | token | 1 | 1 |" in text
     assert "Roles with no findings: `jwt/pinned`." in text
     assert "| `/` | `pki/` | `root-2026` (expires 2026-11-01), `01234567` | on | OCSP only |" in text

@@ -102,9 +102,14 @@ def quiet_security(**overrides):
         "key_status": {"term": 4, "install_time": (NOW - timedelta(days=30)).isoformat(), "encryptions": 10},
         "rotate_config": {"enabled": True, "interval": 30 * 24 * 3600, "max_operations": 3865470566},
         "plugins": [{"name": "kv", "type": "secret", "version": "v0.1.0+builtin", "builtin": True}],
+        "audit_devices": [audit_device("file/"), audit_device("syslog/", "syslog")],
     }
     base.update(overrides)
     return vp.SecurityData(**base)
+
+
+def audit_device(path, kind="file", **options):
+    return {"path": path, "type": kind, "local": False, "options": options}
 
 
 def test_quiet_security_has_no_findings():
@@ -160,6 +165,38 @@ def test_external_plugins():
     assert unversioned.object_path == "database/custom-db"
     catalog = next(f for f in found if f.rule_id == "VP-PLUG-002")
     assert catalog.evidence == {"plugins": ["database/custom-db", "secret/venafi"], "count": 2}
+
+
+def test_no_audit_device_fires_001():
+    found = vp.check_security(quiet_security(audit_devices=[]), NOW)
+    assert ids(found) == ["VP-AUDIT-001"]
+    assert found[0].object_path == "sys/audit"
+
+
+def test_single_audit_device_fires_002():
+    found = vp.check_security(quiet_security(audit_devices=[audit_device("file/")]), NOW)
+    assert ids(found) == ["VP-AUDIT-002"]
+    assert found[0].evidence == {"device_path": "file/", "device_type": "file"}
+
+
+@pytest.mark.parametrize(
+    ("options", "log_raw", "hmac_accessor"),
+    [
+        ({"log_raw": "true"}, True, True),  # Vault returns options as strings
+        ({"hmac_accessor": "false"}, False, False),
+        ({"log_raw": True, "hmac_accessor": False}, True, False),
+    ],
+)
+def test_raw_or_unhashed_audit_device_fires_003(options, log_raw, hmac_accessor):
+    found = vp.check_security(quiet_security(audit_devices=[audit_device("raw/", **options), audit_device("file/")]), NOW)
+    assert ids(found) == ["VP-AUDIT-003"]
+    assert found[0].object_path == "raw/"
+    assert found[0].evidence == {"device_type": "file", "log_raw": log_raw, "hmac_accessor": hmac_accessor}
+
+
+@pytest.mark.parametrize("options", [{}, {"log_raw": "false", "hmac_accessor": "true"}, {"log_raw": "maybe"}])
+def test_audit_options_at_their_defaults_are_quiet(options):
+    assert vp.check_security(quiet_security(audit_devices=[audit_device("a/", **options), audit_device("b/")]), NOW) == []
 
 
 def test_unreadable_security_data_is_not_judged():

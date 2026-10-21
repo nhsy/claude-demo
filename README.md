@@ -13,7 +13,7 @@ A single-file `uv run --script` Python program (`hvac`, `requests`, `cryptograph
 | `roles` | VP-ROLE-001..009, VP-AWS-001..004, VP-GCP-001..004, VP-AZURE-001..003, VP-CERT-001..002, VP-LDAP-001..003 | JWT/OIDC, Kubernetes, AWS, GCP, Azure, cert, LDAP, AppRole and token roles in every namespace: root via login or an LDAP group/user mapping, audience-only or wildcard JWT bindings, any-pod Kubernetes roles, any-account AWS IAM and EC2 roles, any-project GCP IAM and GCE roles, long-lived GCP signed JWTs, tenant-wide Azure roles, unconstrained or catch-all cert roles, LDAP over plaintext or unverified TLS and null binds, role-ID-only AppRoles, never-expiring secret IDs, unbounded periodic tokens |
 | `pki` | VP-PKI-001..008 | Issuer expiry, weak CA keys, AIA/CRL/OCSP, auto-tidy, leaves outliving the CA (needs the PKI add-on policy) |
 | `quotas` | VP-QUOTA-001..004 | Missing or path-only rate-limit and lease-count quotas, unaudited throttling |
-| `security` | VP-SEC-001..004, VP-PLUG-001..002 | Root/recovery token generation or rekey in progress, barrier key age and rotation, external plugins |
+| `security` | VP-SEC-001..004, VP-PLUG-001..002, VP-AUDIT-001..003 | Root/recovery token generation or rekey in progress, barrier key age and rotation, external plugins, audit devices (none, single, raw or unhashed) |
 | `audit` | all live rules | One combined `*-posture-*.json` |
 | `access` | offline | "Who can do X on path Y" from ACL policy files, using Vault's matching rules (checked against `sys/capabilities`) |
 | `diff` | offline | "What changed since the last review": new, resolved and unchanged findings between two result files, by fingerprint |

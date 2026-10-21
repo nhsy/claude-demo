@@ -4,7 +4,7 @@
 
 A read-only HashiCorp Vault **security posture** review for Claude Code. Ask Claude whether Vault is configured safely, whether any GitHub Actions or Kubernetes login role is too loose, whether a CA is about to expire, or which policy lets someone write a path. A bundled script reads Vault (GET only) and writes small JSON files; Claude reads them, explains the findings and drafts fixes as text.
 
-It complements [vault-ops](https://github.com/nhsy-hcp/vault-ops-skill) (health, inventory, policies, entities, client counts). Where the two overlap, the rule catalogue names the vault-ops rule that reports the same thing.
+It complements [vault-ops](https://github.com/nhsy-hcp/vault-ops-skill) (health, inventory, policies, entities, client counts). Where the two overlap (audit devices: VP-AUDIT-001..003 and VT-AUD-001..003), the rule catalogue names the vault-ops rule that reports the same thing.
 
 ## Prerequisites
 
@@ -65,7 +65,7 @@ claude
 | `roles` | VP-ROLE-001..009 | Roles that yield or mint root; JWT roles bound only by audience or by wildcard claims; verbose OIDC logging; Kubernetes roles open to any service account or namespace; AppRoles without secret IDs or with secret IDs that never expire; periodic tokens with no max TTL |
 | `pki` | VP-PKI-001..008 | Expired or expiring issuers (30/90 days); weak CA keys or SHA-1; no AIA URL; auto-tidy off; CRL and OCSP both off; leaves allowed to outlive the CA |
 | `quotas` | VP-QUOTA-001..004 | No rate-limit or lease-count quota; only path-scoped quotas; throttled requests not audit-logged |
-| `security` | VP-SEC-001..004, VP-PLUG-001..002 | Root/recovery token generation or rekey in progress; barrier key age; no rotation interval; external and unversioned plugins |
+| `security` | VP-SEC-001..004, VP-PLUG-001..002, VP-AUDIT-001..003 | Root/recovery token generation or rekey in progress; barrier key age; no rotation interval; external and unversioned plugins; no, single, raw or unhashed audit devices |
 | `audit` | all of the above | One combined file |
 | `access` | none (offline) | Effective capabilities of ACL policy files on paths, evaluated with Vault's own matching rules |
 | `diff` | none (offline) | New, resolved and unchanged findings between two result files, by fingerprint |

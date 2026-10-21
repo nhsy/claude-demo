@@ -36,6 +36,7 @@ def test_audit_document_matches_schema_and_expected_findings(fake_vault, tmp_pat
     assert document["run"]["vault_addr"] == "http://vault.test:8200"
     assert document["coverage"]["complete"] is True
     assert document["summary"]["by_rule"] == {
+        "VP-AUDIT-002": 1,
         "VP-PKI-002": 1,
         "VP-PKI-004": 1,
         "VP-PLUG-001": 1,
