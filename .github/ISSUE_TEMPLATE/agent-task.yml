@@ -1,6 +1,5 @@
 name: Agent task
 description: Work for the Claude Code issue pipeline
-title: "[Agent] "
 body:
   - type: textarea
     id: summary
