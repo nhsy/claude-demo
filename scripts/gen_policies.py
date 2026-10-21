@@ -76,6 +76,7 @@ NAMESPACE_RULES = [
     # secret, Kubernetes the reviewer JWT, GCP the private key, Azure the client secret, Okta the
     # API token, RADIUS the shared secret, CF the password; by source, Kerberos the keytab, and GitHub
     # stores no token); AWS keeps its keys under config/client. Third-party plugins can't be checked.
+    # tests/test_integration.py re-checks the seeded ones on every e2e run.
     ("Auth method config (the script keeps LDAP connection settings only, never binddn or certificates)", "auth/{m}config", ["read"]),
     ("Token roles", "auth/token/roles/", ["list"]),
     (None, "auth/token/roles/+", ["read"]),

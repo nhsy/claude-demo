@@ -10,6 +10,10 @@
 #   VP-GCP-001..004   GCP IAM and GCE roles (written without GCP credentials: Vault checks none at write)
 #   VP-AZURE-001..003 Azure roles (written without auth/azure/config: Vault checks no Azure resource at write)
 #   VP-CERT-001/002   TLS certificate roles with no constraint and a catch-all CN (throwaway CA)
+#   VP-LDAP-001..003  LDAP config over ldap:// with insecure_tls and null binds, a root-mapped group
+#                     (Vault doesn't contact the LDAP server to store config or mappings)
+# Kubernetes, GCP, Azure and LDAP config also get fake secrets: the read-only token can read every
+# auth/<mount>config, and the integration tests check none of them comes back.
 #   VP-PKI-002..006/008  short-lived issuers, no AIA URLs, auto-tidy off, CRL+OCSP off, leaf_not_after=permit
 # auth/k8s/prod/ and ca/int/ (two-segment mounts) show the policies reach deeper mount paths.
 # Unit tests cover what a dev server can't show: VP-QUOTA-001 (conflicts with 003), VP-SEC-003
@@ -54,6 +58,7 @@ enable_auth aws
 enable_auth gcp
 enable_auth azure
 enable_auth cert
+enable_auth ldap
 enable_auth kubernetes k8s/prod
 # A throwaway validation key: the JWT roles are never logged into.
 pubkey="$(openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 2>/dev/null | openssl pkey -pubout)"
@@ -92,6 +97,19 @@ ca="$(openssl req -x509 -newkey rsa:2048 -nodes -keyout /dev/null -subj '/CN=pos
 write auth/cert/certs/any-cert certificate="$ca" token_policies=app
 write auth/cert/certs/wild certificate="$ca" allowed_common_names='*' token_policies=app
 write auth/cert/certs/scoped certificate="$ca" allowed_common_names=svc.example.com token_policies=app
+write auth/ldap/config url=ldap://ldap.example.com userattr=uid binddn=cn=posture-bind,dc=example,dc=com bindpass=FAKE-LDAP-BINDPASS-must-never-appear \
+  insecure_tls=true deny_null_bind=false
+write auth/ldap/groups/admins policies=root
+write auth/ldap/groups/devs policies=default
+# None of these contacts the cloud or cluster at write. JWT's OIDC client secret needs a reachable
+# discovery URL, so its config (above) has none; the integration test checks the field name only.
+write auth/kubernetes/config kubernetes_host=https://k8s.example.com token_reviewer_jwt=FAKE-REVIEWER-JWT-must-never-appear disable_local_ca_jwt=true
+write auth/gcp/config credentials=- <<'JSON'
+{"type": "service_account", "project_id": "posture", "private_key_id": "fake", "private_key": "FAKE-GCP-KEY-must-never-appear",
+ "client_email": "posture@posture.iam.gserviceaccount.com", "client_id": "1"}
+JSON
+write auth/azure/config tenant_id=00000000-0000-0000-0000-000000000000 resource=https://management.azure.com client_id=posture \
+  client_secret=FAKE-AZURE-SECRET-must-never-appear
 
 # ---- PKI
 enable_pki() { vault secrets list -format=json | jq -e --arg p "$1/" '.[$p]' >/dev/null || vault secrets enable -path="$1" pki >/dev/null; }
@@ -108,4 +126,4 @@ fi
 vault patch pki/issuer/critical leaf_not_after_behavior=permit >/dev/null  # patch: a write would reset issuer_name
 write pki_off/config/crl disable=true ocsp_disable=true
 
-echo "Seeded ${VAULT_ADDR}: rate-limit quota on auth/userpass/, external plugin posture-dummy, generate-root and rekey in progress, auth roles (also under auth/k8s/prod/), PKI issuers (also under ca/int/)"
+echo "Seeded ${VAULT_ADDR}: rate-limit quota on auth/userpass/, external plugin posture-dummy, generate-root and rekey in progress, auth roles (also under auth/k8s/prod/) and LDAP config, PKI issuers (also under ca/int/)"
