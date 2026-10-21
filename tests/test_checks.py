@@ -50,6 +50,35 @@ def test_cluster_wide_quotas_are_quiet():
     assert vp.check_quotas(data) == []
 
 
+def builtin_default(max_leases=300000):
+    return {"name": "default", "type": "lease-count", "path": "", "max_leases": max_leases}
+
+
+def test_builtin_default_lease_quota_fires_002():
+    # Enterprise 1.16+ ships this quota on every new install: it isn't an operator's limit.
+    found = vp.check_quotas(vp.QuotaData(config=None, rate_limit=None, lease_count=[builtin_default()]))
+    assert ids(found) == ["VP-QUOTA-002"]
+    assert found[0].evidence == {"builtin_default": True, "max_leases": 300000}
+
+
+def test_tuned_default_lease_quota_is_quiet():
+    assert vp.check_quotas(vp.QuotaData(config=None, rate_limit=None, lease_count=[builtin_default(5000)])) == []
+
+
+def test_global_lease_quota_beside_builtin_default_is_quiet():
+    data = vp.QuotaData(config=None, rate_limit=None, lease_count=[builtin_default(), quota("global", "", "lease-count")])
+    assert vp.check_quotas(data) == []
+
+
+def test_path_scoped_lease_quotas_with_builtin_default_fire_003():
+    data = vp.QuotaData(config=None, rate_limit=None, lease_count=[builtin_default(), quota("pki", "pki/", "lease-count")])
+    found = vp.check_quotas(data)
+    assert ids(found) == ["VP-QUOTA-003"]
+    assert found[0].evidence["quota_type"] == "lease-count"
+    assert found[0].evidence["quotas"] == 1
+    assert found[0].evidence["paths"] == ["pki/"]
+
+
 @pytest.mark.parametrize(("audit_logging", "expected"), [(False, ["VP-QUOTA-004"]), (True, [])])
 def test_rate_limit_audit_logging(audit_logging, expected):
     data = vp.QuotaData(config={"enable_rate_limit_audit_logging": audit_logging}, rate_limit=[quota("global")], lease_count=None)

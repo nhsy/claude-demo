@@ -1,7 +1,7 @@
 #!/bin/bash
 # Seed a dev server (root token) with configuration that trips every live-testable VP rule:
 #   VP-QUOTA-003/004  a path-scoped rate-limit quota, rate-limit audit logging off
-#   VP-QUOTA-002      no lease-count quota (Enterprise only)
+#   VP-QUOTA-002      only Vault's built-in default lease-count quota (Enterprise only)
 #   VP-SEC-001/002    a root token generation and an unseal-key rekey left in progress
 #   VP-SEC-004        dev servers have no rotation interval
 #   VP-PLUG-001/002   an external plugin registered without a version
