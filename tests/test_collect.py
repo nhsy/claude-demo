@@ -218,6 +218,24 @@ def test_collect_roles_reads_cert_roles_without_the_ca():
     assert data.roles[0].config == {"allowed_common_names": ["*"], "ocsp_enabled": False}
 
 
+def test_collect_roles_reads_ldap_group_and_user_mappings():
+    routes = {
+        ("sys/auth", False): mounts(ldap="ldap"),
+        ("auth/ldap/groups", True): ok({"keys": ["admins"]}),
+        ("auth/ldap/groups/admins", False): ok({"policies": ["root"]}),
+        ("auth/ldap/users", True): ok({"keys": ["admins"]}),
+        ("auth/ldap/users/admins", False): ok({"policies": ["app"], "groups": "admins", "alias_metadata": {}}),
+    }
+    coverage = vp.Coverage()
+    data = vp.collect_roles(FakeReader(routes), coverage, [""])
+    assert [(r.source, r.path, r.config) for r in data.roles] == [
+        ("ldap_group", "auth/ldap/groups/admins", {"policies": ["root"]}),
+        ("ldap_user", "auth/ldap/users/admins", {"policies": ["app"], "groups": "admins"}),
+    ]
+    # A group and a user of the same name get scopes of their own.
+    assert coverage.status("roles.ldap/groups/admins") == coverage.status("roles.ldap/users/admins") == vp.OK
+
+
 def test_collect_roles_denied_role_body_is_a_gap():
     routes = dict(COMMUNITY_ROUTES)
     routes[("auth/jwt/role/ci", False)] = hvac_exc.Forbidden()

@@ -37,7 +37,10 @@ def all_reads():
     """Every (namespace, path, is_list) the collectors issue, on an Enterprise-shaped tree three levels
     deep, with auth and PKI mounts one to three path segments deep (MOUNT_DEPTH in gen_policies.py)."""
     routes = dict(COMMUNITY_ROUTES)
-    routes[("sys/auth", False)] = ok({**COMMUNITY_ROUTES[("sys/auth", False)]["data"], "k8s/prod/": {"type": "kubernetes", "config": {}}})
+    routes[("sys/auth", False)] = ok({**COMMUNITY_ROUTES[("sys/auth", False)]["data"], "k8s/prod/": {"type": "kubernetes", "config": {}}, "ldap/": {"type": "ldap", "config": {}}})
+    for segment in ("groups", "users"):
+        routes[(f"auth/ldap/{segment}", True)] = ok({"keys": ["admins"]})
+        routes[(f"auth/ldap/{segment}/admins", False)] = ok({"policies": ["root"]})
     routes[("auth/k8s/prod/role", True)] = ok({"keys": ["web"]})
     routes[("auth/k8s/prod/role/web", False)] = ok({"bound_service_account_names": ["web"]})
     routes[("sys/mounts", False)] = ok({**COMMUNITY_ROUTES[("sys/mounts", False)]["data"], "pki/int/": {"type": "pki", "config": {}}})
@@ -52,13 +55,16 @@ def all_reads():
     for ns, child in (("a", "b/"), ("a/b", "c/")):
         routes[(ns, "sys/namespaces", True)] = ok({"keys": [child]})
     for ns in ("a", "a/b", "a/b/c"):
-        routes[(ns, "sys/auth", False)] = mounts(approle="approle", aws="aws", gcp="gcp", azure="azure", token="ns_token", **{"apps/team/x": "approle", "cert/x": "cert"})
+        routes[(ns, "sys/auth", False)] = mounts(approle="approle", aws="aws", gcp="gcp", azure="azure", token="ns_token", **{"apps/team/x": "approle", "cert/x": "cert", "ldap/corp": "ldap"})
         routes[(ns, "auth/gcp/role", True)] = ok({"keys": ["gce"]})
         routes[(ns, "auth/gcp/role/gce", False)] = ok({"type": "gce", "bound_projects": ["my-proj"]})
         routes[(ns, "auth/azure/role", True)] = ok({"keys": ["vm"]})
         routes[(ns, "auth/azure/role/vm", False)] = ok({"bound_service_principal_ids": ["00000000-0000-0000-0000-000000000001"]})
         routes[(ns, "auth/cert/x/certs", True)] = ok({"keys": ["web"]})
         routes[(ns, "auth/cert/x/certs/web", False)] = ok({"allowed_common_names": ["web.example.com"]})
+        for segment in ("groups", "users"):
+            routes[(ns, f"auth/ldap/corp/{segment}", True)] = ok({"keys": ["ops"]})
+            routes[(ns, f"auth/ldap/corp/{segment}/ops", False)] = ok({"policies": ["app"]})
         routes[(ns, "auth/aws/role", True)] = ok({"keys": ["ec2"]})
         routes[(ns, "auth/aws/role/ec2", False)] = ok({"auth_type": "ec2", "bound_account_id": ["123456789012"]})
         for mount in ("approle", "apps/team/x"):
@@ -86,6 +92,8 @@ def all_reads():
         ("a/b/c", "auth/apps/team/x/role/svc", False),
         ("a/b/c", "ca/x/y/issuers", True),
         ("a/b", "auth/cert/x/certs/web", False),
+        ("", "auth/ldap/groups/admins", False),
+        ("a/b/c", "auth/ldap/corp/users/ops", False),
     }
     assert deep <= calls, "the multi-segment mounts were not read"
     return calls
@@ -141,6 +149,10 @@ def test_pki_reads_need_the_addon():
         "auth/approle/role/certs/role-id",
         "auth/approle/role/certs/secret-id",
         "team-a/auth/approle/role/certs/secret-id",
+        # Or named "groups"/"users" under a deeper mount's LDAP mapping grants (auth/+/+/users/+).
+        "auth/approle/role/groups/role-id",
+        "auth/approle/role/users/secret-id",
+        "team-a/auth/approle/role/users/role-id",
         "secret/data/app",
         "sys/policies/acl/admin",
         "auth/token/create",

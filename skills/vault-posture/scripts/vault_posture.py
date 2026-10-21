@@ -198,6 +198,9 @@ ROLE_SOURCES: dict[str, tuple[str, tuple[str, ...]]] = {
             *TOKEN_PARAM_FIELDS,
         ),
     ),
+    # LDAP group and user -> policy mappings (both under one mount; see ROLE_SOURCE_ALIASES).
+    "ldap_group": ("groups", ("policies", "token_policies", "groups")),
+    "ldap_user": ("users", ("policies", "token_policies", "groups")),
     "approle": ("role", ("bind_secret_id", "secret_id_bound_cidrs", "secret_id_num_uses", "secret_id_ttl", "local_secret_ids", *TOKEN_PARAM_FIELDS)),
     "token": (
         "roles",
@@ -218,7 +221,7 @@ ROLE_SOURCES: dict[str, tuple[str, tuple[str, ...]]] = {
 }
 # Mount type -> the role sources read on it, where that isn't just the source of the same name
 # (Enterprise child namespaces report ns_token).
-ROLE_SOURCE_ALIASES: dict[str, tuple[str, ...]] = {"oidc": ("jwt",), "ns_token": ("token",)}
+ROLE_SOURCE_ALIASES: dict[str, tuple[str, ...]] = {"oidc": ("jwt",), "ns_token": ("token",), "ldap": ("ldap_group", "ldap_user")}
 ISSUER_FIELDS = ("issuer_name", "leaf_not_after_behavior", "issuing_certificates", "crl_distribution_points", "ocsp_servers", "usage", "revoked")
 AUTO_TIDY_FIELDS = ("enabled", "interval_duration", "tidy_cert_store", "tidy_revoked_certs", "tidy_expired_issuers")
 CRL_FIELDS = ("disable", "ocsp_disable", "auto_rebuild", "enable_delta", "expiry")
@@ -871,8 +874,12 @@ def check_roles(data: RoleData) -> list[Finding]:
             explicit = _seconds(c.get("token_explicit_max_ttl")) or _seconds(c.get("explicit_max_ttl"))
         else:
             policies = [str(p) for p in as_list(c.get("token_policies"))]
+            mapped = [str(p) for p in as_list(c.get("policies"))]  # LDAP group and user mappings
             if "root" in policies:
                 found.append(_role_finding("VP-ROLE-001", role, f"Logging in through {role.source} role '{role.name}' yields a root token.", token_policies=policies))
+            elif "root" in mapped:
+                kind = "group" if role.source == "ldap_group" else "user"
+                found.append(_role_finding("VP-ROLE-001", role, f"LDAP {kind} '{role.name}' is mapped to the root policy: logging in through it yields a root token.", policies=mapped))
             period = _seconds(c.get("token_period"))
             explicit = _seconds(c.get("token_explicit_max_ttl"))
         if period and not explicit:
