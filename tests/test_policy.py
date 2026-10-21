@@ -30,6 +30,9 @@ def test_policy_only_grants_read_list_or_deny(policy):
     assert rules, "no path blocks parsed"
     for rule in rules:
         caps = set(rule.capabilities)
+        if rule.path == "sys/audit":  # Vault requires sudo even to list audit devices
+            assert caps == {"read", "sudo"}
+            continue
         assert caps <= {"read", "list"} or caps == {"deny"}, rule.path
 
 
@@ -173,3 +176,9 @@ def test_auth_config_grant_reaches_config_only(mount, namespace):
     assert vp.effective_capabilities(rules, f"{namespace}auth/{mount}/config")["capabilities"] == ["read"]
     for below in ("client", "certificate/x", "rotate-root"):
         assert vp.effective_capabilities(rules, f"{namespace}auth/{mount}/config/{below}")["capabilities"] == ["deny"], below
+
+
+def test_audit_devices_get_sudo_and_nothing_else_does():
+    rules = load(BASE, PKI)
+    assert sorted(vp.effective_capabilities(rules, "sys/audit")["capabilities"]) == ["read", "sudo"]
+    assert [r.path for r in rules if "sudo" in r.capabilities] == ["sys/audit"]

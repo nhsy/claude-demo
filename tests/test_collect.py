@@ -75,6 +75,7 @@ def test_collect_security_allowlists_fields(community_reader):
     assert data.rekey_recovery is None
     assert data.key_status == {"term": 1, "install_time": "2024-01-02T03:04:05.123456789Z", "encryptions": 42}
     assert [p["name"] for p in data.plugins] == ["approle", "kv", "custom-db"]
+    assert data.audit_devices == [{"path": "file/", "type": "file", "local": False, "options": {"hmac_accessor": "true"}}]
     assert not any(marker in repr(data) for marker in SECRET_MARKERS)
     assert coverage.status("security.generate_recovery_token") == vp.NOT_APPLICABLE
     assert coverage.status("security.rekey_recovery") == vp.NOT_APPLICABLE
@@ -88,6 +89,18 @@ def test_collect_security_denied_catalog():
     data = vp.collect_security(FakeReader(routes), coverage)
     assert data.plugins is None
     assert coverage.status("security.plugin_catalog") == vp.DENIED
+
+
+def test_collect_security_audit_devices_empty_or_denied():
+    routes = dict(COMMUNITY_ROUTES)
+    routes[("sys/audit", False)] = ok({})
+    coverage = vp.Coverage()
+    assert vp.collect_security(FakeReader(routes), coverage).audit_devices == []
+    assert coverage.status("security.audit_devices") == vp.OK
+    routes[("sys/audit", False)] = hvac_exc.Forbidden()  # a token without sudo on sys/audit
+    coverage = vp.Coverage()
+    assert vp.collect_security(FakeReader(routes), coverage).audit_devices is None
+    assert coverage.status("security.audit_devices") == vp.DENIED
 
 
 def test_reader_data_unwraps_envelope_and_raw_bodies():
