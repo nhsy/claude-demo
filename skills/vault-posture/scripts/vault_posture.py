@@ -106,6 +106,10 @@ PLUGIN_FIELDS = ("name", "type", "version", "builtin", "deprecation_status")
 # Audit devices: never file_path, address, socket or syslog settings, prefix or Enterprise filters.
 AUDIT_DEVICE_FIELDS = ("type", "local")
 AUDIT_OPTION_FIELDS = ("log_raw", "hmac_accessor", "elide_list_responses", "fallback")
+# Server config: the lease TTL ceiling and, per listener, its address, TLS switch and the two
+# unauthenticated-access flags. Never telemetry sinks or tokens, storage, seals or file paths.
+LISTENER_FIELDS = ("address", "tls_disable")
+LISTENER_BLOCK_FLAGS = (("telemetry", "unauthenticated_metrics_access"), ("profiling", "unauthenticated_pprof_access"))
 TOKEN_PARAM_FIELDS = (
     "token_policies",
     "token_ttl",
@@ -664,6 +668,7 @@ class SecurityData:
     rotate_config: dict[str, Any] | None = None
     plugins: list[dict[str, Any]] | None = None
     audit_devices: list[dict[str, Any]] | None = None
+    config_state: dict[str, Any] | None = None
 
 
 SECURITY_READS = {
@@ -694,7 +699,23 @@ def collect_security(reader: Reader, coverage: Coverage) -> SecurityData:
             for path, device in sorted(devices.items())
             if isinstance(device, dict) and path.endswith("/")
         ]
+    # Root namespace only; read is enough (no sudo).
+    status, state = attempt(coverage, "security.config_state", lambda: reader.data("sys/config/state/sanitized"))
+    if status == OK:
+        data.config_state = {"max_lease_ttl": state.get("max_lease_ttl"), "listeners": [listener_facts(item) for item in state.get("listeners") or [] if isinstance(item, dict)]}
     return data
+
+
+def listener_facts(listener: dict[str, Any]) -> dict[str, Any]:
+    """One sanitized listener, allowlisted. HCL blocks (telemetry, profiling) come back as a list of one map."""
+    config = listener.get("config") if isinstance(listener.get("config"), dict) else {}
+    facts = {"type": listener.get("type"), **pick(config, LISTENER_FIELDS)}
+    for block, flag in LISTENER_BLOCK_FLAGS:
+        value = config.get(block)
+        for part in value if isinstance(value, list) else [value]:
+            if isinstance(part, dict) and flag in part:
+                facts[flag] = part[flag]
+    return facts
 
 
 def check_security(data: SecurityData, now: datetime, key_age_days: int = KEY_AGE_WARNING_DAYS) -> list[Finding]:
@@ -2184,6 +2205,7 @@ def security_data(data: SecurityData) -> dict[str, Any]:
         "rotate_config": data.rotate_config,
         "external_plugins": [p for p in data.plugins or [] if p.get("builtin") is False] if data.plugins is not None else None,
         "audit_devices": data.audit_devices,
+        "config_state": data.config_state,
     }
 
 

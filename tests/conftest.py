@@ -117,6 +117,16 @@ COMMUNITY_ROUTES = {
         }
     ),
     ("sys/audit", False): ok({"file/": {"type": "file", "description": "", "local": False, "path": "file/", "options": {"file_path": "/var/log/vault/audit.log", "hmac_accessor": "true"}}}),
+    ("sys/config/state/sanitized", False): ok(
+        {
+            "max_lease_ttl": 0,
+            "default_lease_ttl": 0,
+            "listeners": [{"type": "tcp", "config": {"address": "127.0.0.1:8200", "tls_disable": True, "proxy_protocol_behavior": "allow_authorized"}}],
+            "telemetry": {"circonus_api_token": SECRET_MARKERS[0]},
+            "storage": {"type": "raft", "path": "/vault/data"},
+            "seals": [{"type": "shamir"}],
+        }
+    ),
     ("sys/namespaces", True): enterprise_only(),
     ("sys/auth", False): mounts(token="token", jwt="jwt", kubernetes="kubernetes", userpass="userpass"),
     ("auth/token/roles", True): not_found(),
