@@ -56,6 +56,16 @@ Role findings carry `namespace`, `evidence.mount` and `evidence.role`; `object.p
 | VP-CERT-001 | medium | A TLS certificate auth role sets no `allowed_*` name, OU or organization constraint and no `required_extensions`: any client certificate the role's trusted CA signed logs in, whoever it was issued to. `evidence.ocsp_enabled` shows whether revoked certificates are at least refused. | `vault write <object.path> allowed_common_names=<cn>` (or `allowed_dns_sans=…`, `allowed_uri_sans=…`, `allowed_organizational_units=…`, `required_extensions=<oid>:<value>`) | Intended when the CA is dedicated to this one role's clients; then say so rather than flag it as a defect. The trusted CA itself is not read or judged. Existing certificates that don't match the new constraint stop logging in: check the audit log for `auth/<mount>login` with this role first. |
 | VP-CERT-002 | medium | A cert role's only name constraint is a catch-all glob (`evidence.broad_patterns`: `*`, `*.*` or a bare TLD such as `*.com` in `allowed_names`, `allowed_common_names` or `allowed_dns_sans`), so it accepts the same certificates as VP-CERT-001. | `vault write <object.path> allowed_common_names=<exact cn or *.your-domain>` (likewise `allowed_dns_sans` / `allowed_names`) | Not flagged when another field narrows the role (e.g. `allowed_organizational_units`): Vault requires every constraint to match. `*.example.com` and `web-*` are not catch-alls. |
 
+## LDAP auth config
+
+LDAP findings come from the mount's stored connection settings (`auth/<mount>config`); Vault never contacts the LDAP server for this review. `object.path` is `auth/<mount>config` and `object.kind` is `ldap_config`; add `-namespace=<namespace>` outside the root namespace. A `vault write` to `auth/<mount>config` updates only the fields given; read it before and after, and test a login once the change is made.
+
+| Rule | Severity | Meaning | Remediation (for an operator to run) | Caveats |
+| --- | --- | --- | --- | --- |
+| VP-LDAP-001 | medium | `insecure_tls=true`: Vault does not verify the LDAP server's certificate on `ldaps://` or StartTLS connections (`evidence.url`, `evidence.starttls`). Anyone who can intercept the connection can impersonate the directory, read every login password and answer with group memberships of their choosing. | `vault write <object.path> insecure_tls=false certificate=@<ldap-ca.pem>` | Supply the directory's CA in `certificate` first, or every login fails once verification is on. On a plaintext URL without StartTLS (VP-LDAP-002) there is no TLS to verify until that is fixed. |
+| VP-LDAP-002 | medium | The mount connects over `ldap://` (`evidence.plaintext_urls`) without `starttls`: user passwords on every login and the bind DN's password cross the network in clear text. | `vault write <object.path> url=ldaps://<host>:636` (or keep the URL and set `starttls=true`), plus `certificate=@<ldap-ca.pem>` | Loopback URLs (`127.0.0.1`, `localhost`, `::1`) are not flagged: a fresh, unconfigured mount reports `ldap://127.0.0.1`. Every URL in a comma-separated `url` is checked, fallbacks included. |
+| VP-LDAP-003 | medium | `deny_null_bind=false`: Vault passes an empty password to the directory. Many directories treat a bind with a DN and no password as an anonymous (unauthenticated) bind and report success, so anyone can log in as any user and receive that user's policies. | `vault write <object.path> deny_null_bind=true` | No legitimate login uses an empty password. Whether the directory accepts unauthenticated binds can't be seen from Vault; treat the setting as the defect either way. |
+
 ## PKI
 
 PKI findings need the `vault-posture-pki-reader` add-on policy; without it the `mounts` scope is `denied` and no VP-PKI rule is judged. `object.path` is `<mount>issuer/<issuer_id>` for issuer rules and `<mount>` for mount rules; `evidence.issuer_name` / `evidence.common_name` identify the issuer. Add `-namespace=<namespace>` outside the root namespace.
@@ -76,6 +86,6 @@ PKI findings need the `vault-posture-pki-reader` add-on policy; without it the `
 When reporting, group in this order:
 
 1. VP-SEC-001 (possible unauthorised root), VP-ROLE-001 (root via login), VP-ROLE-005 (any pod logs in), VP-AWS-001/002 (any AWS account logs in), VP-GCP-001/002 (any GCP project logs in), VP-PKI-001 (expired CA), VP-SEC-002.
-2. VP-ROLE-002/003/006/007, VP-GCP-003, VP-AZURE-001, VP-CERT-001/002 (loose login bindings), VP-PKI-002/006/007, VP-QUOTA-001/002 (no protection from noisy clients or lease explosions).
+2. VP-ROLE-002/003/006/007, VP-GCP-003, VP-AZURE-001, VP-CERT-001/002 (loose login bindings), VP-LDAP-001/002/003 (LDAP passwords exposed or not checked), VP-PKI-002/006/007, VP-QUOTA-001/002 (no protection from noisy clients or lease explosions).
 3. VP-QUOTA-003, VP-SEC-003, VP-PLUG-001, VP-ROLE-004/008/009, VP-AWS-003/004, VP-GCP-004, VP-AZURE-002/003, VP-PKI-003/004/005/008.
 4. Info: VP-QUOTA-004, VP-SEC-004, VP-PLUG-002.

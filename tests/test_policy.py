@@ -41,6 +41,7 @@ def all_reads():
     for segment in ("groups", "users"):
         routes[(f"auth/ldap/{segment}", True)] = ok({"keys": ["admins"]})
         routes[(f"auth/ldap/{segment}/admins", False)] = ok({"policies": ["root"]})
+    routes[("auth/ldap/config", False)] = ok({"url": "ldaps://ldap.example.com"})
     routes[("auth/k8s/prod/role", True)] = ok({"keys": ["web"]})
     routes[("auth/k8s/prod/role/web", False)] = ok({"bound_service_account_names": ["web"]})
     routes[("sys/mounts", False)] = ok({**COMMUNITY_ROUTES[("sys/mounts", False)]["data"], "pki/int/": {"type": "pki", "config": {}}})
@@ -65,6 +66,7 @@ def all_reads():
         for segment in ("groups", "users"):
             routes[(ns, f"auth/ldap/corp/{segment}", True)] = ok({"keys": ["ops"]})
             routes[(ns, f"auth/ldap/corp/{segment}/ops", False)] = ok({"policies": ["app"]})
+        routes[(ns, "auth/ldap/corp/config", False)] = ok({"url": "ldaps://ldap.example.com"})
         routes[(ns, "auth/aws/role", True)] = ok({"keys": ["ec2"]})
         routes[(ns, "auth/aws/role/ec2", False)] = ok({"auth_type": "ec2", "bound_account_id": ["123456789012"]})
         for mount in ("approle", "apps/team/x"):
@@ -94,6 +96,7 @@ def all_reads():
         ("a/b", "auth/cert/x/certs/web", False),
         ("", "auth/ldap/groups/admins", False),
         ("a/b/c", "auth/ldap/corp/users/ops", False),
+        ("a/b", "auth/ldap/corp/config", False),
     }
     assert deep <= calls, "the multi-segment mounts were not read"
     return calls
@@ -133,8 +136,6 @@ def test_pki_reads_need_the_addon():
         "auth/approle/role/svc/secret-id/",
         "team-a/auth/approle/role/svc/role-id",
         "auth/aws/config/client",
-        "auth/gcp/config",
-        "auth/azure/config",
         "auth/k8s/prod/role/x/role-id",
         "auth/apps/team/x/role/svc/secret-id",
         "auth/apps/team/x/role/svc/secret-id/",
@@ -162,3 +163,13 @@ def test_pki_reads_need_the_addon():
 def test_sensitive_paths_are_never_readable(path):
     caps = vp.effective_capabilities(load(BASE, PKI), path)["capabilities"]
     assert caps == ["deny"], path
+
+
+@pytest.mark.parametrize("mount", ["ldap", "gcp", "azure", "kubernetes", "corp/ldap", "a/b/c"])
+@pytest.mark.parametrize("namespace", ["", "team-a/", "a/b/c/d/e/"])
+def test_auth_config_grant_reaches_config_only(mount, namespace):
+    # auth/{m}config is read on every method (gen_policies.py lists what each returns); nothing below it.
+    rules = load(BASE, PKI)
+    assert vp.effective_capabilities(rules, f"{namespace}auth/{mount}/config")["capabilities"] == ["read"]
+    for below in ("client", "certificate/x", "rotate-root"):
+        assert vp.effective_capabilities(rules, f"{namespace}auth/{mount}/config/{below}")["capabilities"] == ["deny"], below

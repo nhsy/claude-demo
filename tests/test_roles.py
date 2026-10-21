@@ -318,3 +318,44 @@ def test_cert_catch_all_evidence_and_path():
 def test_cert_roles_still_get_token_param_rules():
     config = {"allowed_common_names": ["svc.example.com"], "token_policies": ["root"], "token_period": 3600}
     assert ids([role("cert", config)]) == ["VP-ROLE-001", "VP-ROLE-009"]
+
+
+# --------------------------------------------------------------------------- LDAP config
+
+
+def ldap_config(config, mount="ldap/", namespace=""):
+    return vp.AuthConfig(namespace, mount, "ldap", config)
+
+
+def ldap_ids(config):
+    return sorted(f.rule_id for f in vp.check_roles(vp.RoleData(configs=[ldap_config(config)])))
+
+
+SAFE_LDAP = {"url": "ldaps://ldap.example.com", "starttls": False, "insecure_tls": False, "deny_null_bind": True}
+
+
+@pytest.mark.parametrize(
+    ("change", "expected"),
+    [
+        ({}, []),
+        ({"insecure_tls": True}, ["VP-LDAP-001"]),
+        ({"url": "ldap://ldap.example.com"}, ["VP-LDAP-002"]),
+        ({"url": "ldap://ldap.example.com", "starttls": True}, []),  # StartTLS upgrades the connection
+        ({"url": "ldaps://a.example.com,LDAP://b.example.com:389"}, ["VP-LDAP-002"]),  # any fallback URL counts
+        ({"url": "ldap://127.0.0.1"}, []),  # a fresh mount's default: loopback never crosses the network
+        ({"url": "ldap://localhost,ldap://[::1]:389"}, []),
+        ({"url": "ldap://[::1"}, ["VP-LDAP-002"]),  # malformed: judged, not a crash
+        ({"deny_null_bind": False}, ["VP-LDAP-003"]),
+        ({"deny_null_bind": None}, []),  # unread: not judged
+        ({"url": "ldap://ldap.example.com", "insecure_tls": True, "deny_null_bind": False}, ["VP-LDAP-001", "VP-LDAP-002", "VP-LDAP-003"]),
+    ],
+)
+def test_ldap_config_rules(change, expected):
+    assert ldap_ids({**SAFE_LDAP, **change}) == expected
+
+
+def test_ldap_config_finding_evidence_and_path():
+    (f,) = vp.check_roles(vp.RoleData(configs=[ldap_config({**SAFE_LDAP, "url": "ldaps://a.example.com,ldap://b.example.com"}, mount="corp/ldap/", namespace="team-a")]))
+    assert (f.rule_id, f.object_kind, f.object_path, f.namespace) == ("VP-LDAP-002", "ldap_config", "auth/corp/ldap/config", "team-a")
+    assert f.evidence["plaintext_urls"] == ["ldap://b.example.com"]
+    assert f.evidence["mount"] == "corp/ldap/"
