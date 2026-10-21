@@ -38,6 +38,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import sys
 from collections import Counter
 from dataclasses import dataclass, field
@@ -1547,6 +1548,105 @@ def diff_documents(old: dict[str, Any], new: dict[str, Any], started: datetime) 
         "summary": {"new": count_findings(added), "resolved": count_findings(resolved), "unchanged": len(unchanged), "rotated": len(rotated)},
         "findings": {"new": added, "resolved": resolved, "rotated": rotated, "unchanged": unchanged},
     }
+
+
+# --------------------------------------------------------------------------- rule catalogue (references/rules.md)
+
+# The catalogue ships beside the script; the report reads its Meaning, Remediation and
+# Caveats columns and its Ranking section at runtime, so rules.md stays the one source.
+CATALOGUE_PATH = Path(__file__).resolve().parents[1] / "references/rules.md"
+CATALOGUE_ROW = re.compile(r"^\|\s*(VP-[A-Z]+-\d{3})\s*\|")
+RANKED_IDS = re.compile(r"VP-([A-Z]+)-(\d{3})((?:/\d{3})*)")  # VP-AWS-001/002 ranks both
+RULE_REFERENCE = re.compile(r"VP-[A-Z]+-\d{3}")
+CODE_SPAN = re.compile(r"`([^`]+)`")
+PLACEHOLDER = re.compile(r"<([^<>]+)>")
+# Catalogue placeholder -> evidence key, where the names differ.
+PLACEHOLDER_EVIDENCE = {"cn": "common_name", "name": "plugin_name", "type": "plugin_type"}
+# Left over once the commands are cut out of a Remediation cell: nothing worth repeating.
+CONNECTIVES = re.compile(r"\b(?:or|and|then)\b|[\s.,;:()]")
+
+
+@dataclass(frozen=True)
+class CatalogueEntry:
+    meaning: str
+    remediation: str
+    caveats: str
+
+
+@dataclass
+class Catalogue:
+    entries: dict[str, CatalogueEntry] = field(default_factory=dict)
+    ranking: list[str] = field(default_factory=list)  # rule IDs, most urgent first
+    warning: str | None = None
+
+    def rank(self, rule_id: str) -> tuple[int, int]:
+        """Sort key: catalogue ranking first, then severity for rules it doesn't rank."""
+        position = self.ranking.index(rule_id) if rule_id in self.ranking else len(self.ranking)
+        return position, SEVERITIES.index(RULES[rule_id].severity) if rule_id in RULES else len(SEVERITIES)
+
+    def commands(self, rule_id: str) -> list[str]:
+        """The `vault ...` commands for a rule; a rule that only refers to another ("As VP-PKI-001") borrows its commands."""
+        entry = self.entries.get(rule_id)
+        if entry is None or "No catalogue command" in entry.remediation:
+            return []
+        own = [span for span in CODE_SPAN.findall(entry.remediation) if span.startswith("vault ")]
+        if own:
+            return own
+        referenced = next((r for r in RULE_REFERENCE.findall(entry.remediation) if r != rule_id), None)
+        return self.commands(referenced) if referenced else []
+
+    def guidance(self, rule_id: str) -> str | None:
+        """The Remediation cell when it says more than its commands (conditions, alternatives, references)."""
+        entry = self.entries.get(rule_id)
+        if entry is None:
+            return None
+        rest = CODE_SPAN.sub(lambda m: "" if m[1].startswith("vault ") else m[0], entry.remediation)
+        return entry.remediation if CONNECTIVES.sub("", rest) else None
+
+
+def _cells(line: str) -> list[str]:
+    return [cell.strip().replace("\\|", "|") for cell in re.split(r"(?<!\\)\|", line.strip())[1:-1]]
+
+
+def load_catalogue(path: Path = CATALOGUE_PATH) -> Catalogue:
+    """Parse rules.md; a missing or unreadable file gives an empty catalogue with a warning, never an error."""
+    try:
+        text = path.read_text()
+    except (OSError, UnicodeDecodeError) as exc:
+        return Catalogue(warning=f"rule catalogue {path.name} could not be read ({exc.__class__.__name__}): remediation is omitted")
+    entries = {}
+    for line in text.splitlines():
+        if CATALOGUE_ROW.match(line) and len(cells := _cells(line)) == 5:
+            entries[cells[0]] = CatalogueEntry(meaning=cells[2], remediation=cells[3], caveats=cells[4])
+    ranking: list[str] = []
+    for match in RANKED_IDS.finditer(text.partition("## Ranking")[2]):
+        for number in (match[2], *match[3].split("/")[1:]):
+            if (rule_id := f"VP-{match[1]}-{number}") not in ranking:
+                ranking.append(rule_id)
+    if not entries:
+        return Catalogue(ranking=ranking, warning=f"rule catalogue {path.name} has no rule rows: remediation is omitted")
+    return Catalogue(entries, ranking)
+
+
+def fill_command(command: str, finding_: dict[str, Any]) -> str:
+    """Fill a catalogue command's placeholders from one finding; anything only an operator knows stays <...>."""
+    evidence = finding_.get("evidence") or {}
+    path = (finding_.get("object") or {}).get("path")
+
+    def value(name: str) -> Any:
+        if name == "object.path":
+            return path
+        if name == "mount":  # mount-level findings (VP-PKI-004/006) carry the mount as their path
+            return evidence.get("mount") or (path if path and path.endswith("/") else None)
+        found = evidence.get(PLACEHOLDER_EVIDENCE.get(name, name.replace("-", "_")))
+        return found if isinstance(found, str | int) and not isinstance(found, bool) else None
+
+    filled = PLACEHOLDER.sub(lambda m: m[0] if (v := value(m[1])) in (None, "") else shlex.quote(str(v)), command)
+    namespace = str(finding_.get("namespace") or "/").strip("/")
+    if namespace:
+        words = filled.split(" ", 2)
+        filled = " ".join([*words[:2], f"-namespace={namespace}", *words[2:]])
+    return filled
 
 
 # --------------------------------------------------------------------------- documents
