@@ -216,8 +216,9 @@ ROLE_SOURCES: dict[str, tuple[str, tuple[str, ...]]] = {
         ),
     ),
 }
-# Mount types sharing a role source (Enterprise child namespaces report ns_token).
-ROLE_SOURCE_ALIASES = {"oidc": "jwt", "ns_token": "token"}
+# Mount type -> the role sources read on it, where that isn't just the source of the same name
+# (Enterprise child namespaces report ns_token).
+ROLE_SOURCE_ALIASES: dict[str, tuple[str, ...]] = {"oidc": ("jwt",), "ns_token": ("token",)}
 ISSUER_FIELDS = ("issuer_name", "leaf_not_after_behavior", "issuing_certificates", "crl_distribution_points", "ocsp_servers", "usage", "revoked")
 AUTO_TIDY_FIELDS = ("enabled", "interval_duration", "tidy_cert_store", "tidy_revoked_certs", "tidy_expired_issuers")
 CRL_FIELDS = ("disable", "ocsp_disable", "auto_rebuild", "enable_delta", "expiry")
@@ -788,16 +789,17 @@ def collect_roles(reader: Reader, coverage: Coverage, namespaces: list[str]) -> 
     data = RoleData(namespaces=namespaces)
     for ns in namespaces:
         for mount, mount_type in sorted(mounts_of(reader, coverage, "auth", ns).items()):
-            source = ROLE_SOURCE_ALIASES.get(mount_type, mount_type)
-            if source not in ROLE_SOURCES:
-                continue
-            segment, fields = ROLE_SOURCES[source]
-            base = f"auth/{mount}{segment}"
-            status, names = attempt(coverage, f"roles.{mount}", lambda b=base, n=ns: reader.list(b, namespace=n), ns)
-            for name in names or []:
-                status, body = attempt(coverage, f"roles.{mount}{name}", lambda b=base, r=name, n=ns: reader.data(f"{b}/{r}", namespace=n), ns)
-                if status == OK:
-                    data.roles.append(AuthRole(ns, mount, source, name, pick(body, fields)))
+            sources = [s for s in ROLE_SOURCE_ALIASES.get(mount_type, (mount_type,)) if s in ROLE_SOURCES]
+            for source in sources:
+                segment, fields = ROLE_SOURCES[source]
+                base = f"auth/{mount}{segment}"
+                # One source keeps the plain roles.<mount> scopes; several are told apart by segment.
+                scope = f"roles.{mount}" if len(sources) == 1 else f"roles.{mount}{segment}/"
+                status, names = attempt(coverage, scope, lambda b=base, n=ns: reader.list(b, namespace=n), ns)
+                for name in names or []:
+                    status, body = attempt(coverage, f"{scope}{name}", lambda b=base, r=name, n=ns: reader.data(f"{b}/{r}", namespace=n), ns)
+                    if status == OK:
+                        data.roles.append(AuthRole(ns, mount, source, name, pick(body, fields)))
     return data
 
 
