@@ -108,6 +108,8 @@ The dev server (`compose.yaml` pins the version) is the final word. If it disagr
 - `vault write` to a PKI issuer replaces its whole config (it clears `issuer_name`): use `vault patch`. The seed script does.
 - Empty Vault lists answer 404; Enterprise-only paths answer 404 `enterprise-only feature`; recovery-key endpoints answer 404/400 on Shamir seals. `classify()` maps these to `absent`, `unsupported` and `not_applicable`, none of which make coverage incomplete.
 - Vault Enterprise 1.16+ creates a global lease-count quota `default` (300000 leases) on every new install, so `sys/quotas/lease-count` is never empty there. `check_quotas` treats it, untouched, as no quota.
+- In `sys/config/state/sanitized` the `-dev` listener always shows `127.0.0.1:8200`, whatever `-dev-listen-address` says, and HCL blocks such as a listener's `telemetry` come back as a list of one map. VP-CFG-001 (plaintext network listener) is unit-tested only; the dev configs add a second loopback listener for VP-CFG-002.
+- The Vault image's entrypoint already passes `-config=/vault/config`, so `compose.yaml` adds no `-config` flag for `compose/dev.hcl`: loading it twice binds its extra listener twice and the container exits.
 - `-dev-plugin-dir` tries to mount every plugin it finds, so the dummy plugin would crash the server; the dev servers use `plugin_directory` in config instead.
 - Results and tokens live under `.tmp/` (gitignored). Never commit anything from it; eval fixtures must be generated with `--redact-addr`.
 - `claude plugin eval` aborts every run ("a file in the plugin has more than one name (a hard link)") when uv hard-linked `.venv/` from its cache: rebuild it with `UV_LINK_MODE=copy uv sync --reinstall`.

@@ -140,6 +140,7 @@ SECURITY_DATA = {
     "external_plugins": [{"name": "x"}],
     "key_status": {"term": 2, "install_time": "2026-01-01T00:00:00.123456789Z"},
     "audit_devices": [{"path": "file/", "type": "file", "local": False, "options": {}}],
+    "config_state": {"max_lease_ttl": 31536000, "listeners": []},
 }
 
 
@@ -346,6 +347,9 @@ def test_summary_metrics_and_inventory():
     assert "| Audit devices | `file/` (file) |" in text
     no_devices = render([document([ROOT], data={"security": {**SECURITY_DATA, "audit_devices": []}})])
     assert "| Audit devices | none |" in no_devices
+    assert "| Max lease TTL | 8760h |" in text
+    default_ttl = render([document([ROOT], data={"security": {**SECURITY_DATA, "config_state": {"max_lease_ttl": 0, "listeners": []}}})])
+    assert "| Max lease TTL | default (768h) |" in default_ttl
     assert "| `/` | `jwt/` | jwt | 2 | 1 |" in text and "| `/` | `token/` | token | 1 | 1 |" in text
     assert "Roles with no findings: `jwt/pinned`." in text
     assert "| `/` | `pki/` | `root-2026` (expires 2026-11-01), `01234567` | on | OCSP only |" in text

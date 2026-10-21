@@ -21,8 +21,20 @@ if curl -s -o /dev/null "${ADDR}/v1/sys/health"; then
   exit 1
 fi
 
-# plugin_directory must be absolute, so the config is generated per checkout.
-printf 'plugin_directory = "%s"\n' "$(pwd)/compose/plugins" >"${DIR}/dev.hcl"
+# plugin_directory must be absolute, so the config is generated per checkout. The rest seeds
+# VP-CFG-002/003: a long lease ceiling and a second loopback listener serving metrics without a
+# token (PORT+1 is the dev cluster port, so it takes PORT+2).
+cat >"${DIR}/dev.hcl" <<EOF
+plugin_directory = "$(pwd)/compose/plugins"
+max_lease_ttl = "8760h"
+listener "tcp" {
+  address = "127.0.0.1:$((PORT + 2))"
+  tls_disable = true
+  telemetry {
+    unauthenticated_metrics_access = true
+  }
+}
+EOF
 nohup vault server -dev \
   -dev-root-token-id="${VAULT_DEV_ROOT_TOKEN:-root}" \
   -dev-listen-address="127.0.0.1:${PORT}" \

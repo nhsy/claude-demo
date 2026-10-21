@@ -24,6 +24,8 @@ SEEDED_RULES = {
     "VP-PLUG-002",
     "VP-AUDIT-002",
     "VP-AUDIT-003",
+    "VP-CFG-002",
+    "VP-CFG-003",
     *(f"VP-ROLE-00{i}" for i in range(1, 10)),
     *(f"VP-AWS-00{i}" for i in range(1, 5)),
     *(f"VP-GCP-00{i}" for i in range(1, 5)),
@@ -187,6 +189,16 @@ def test_audit_devices_keep_only_allowlisted_fields(posture):
         assert set(device) <= {"path", "options", *vp.AUDIT_DEVICE_FIELDS}
         assert set(device["options"]) <= set(vp.AUDIT_OPTION_FIELDS)
     assert "file_path" not in json.dumps(devices)
+
+
+def test_config_state_keeps_only_allowlisted_fields(posture):
+    state = posture["data"]["security"]["config_state"]
+    assert set(state) == {"max_lease_ttl", "listeners"}
+    allowed = {"type", *vp.LISTENER_FIELDS, *(flag for _, flag in vp.LISTENER_BLOCK_FLAGS)}
+    for listener in state["listeners"]:
+        assert set(listener) <= allowed
+    text = json.dumps(state)
+    assert "circonus" not in text and "plugin_directory" not in text and "storage" not in text
 
 
 @pytest.mark.parametrize(

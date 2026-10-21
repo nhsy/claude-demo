@@ -109,6 +109,7 @@ AUDIT_OPTION_FIELDS = ("log_raw", "hmac_accessor", "elide_list_responses", "fall
 # Server config: the lease TTL ceiling and, per listener, its address, TLS switch and the two
 # unauthenticated-access flags. Never telemetry sinks or tokens, storage, seals or file paths.
 LISTENER_FIELDS = ("address", "tls_disable")
+DEFAULT_MAX_LEASE_TTL = 768 * 3600  # Vault's ceiling when max_lease_ttl is unset (sanitized config shows 0)
 LISTENER_BLOCK_FLAGS = (("telemetry", "unauthenticated_metrics_access"), ("profiling", "unauthenticated_pprof_access"))
 TOKEN_PARAM_FIELDS = (
     "token_policies",
@@ -266,6 +267,9 @@ RULES: dict[str, Rule] = {
     "VP-AUDIT-001": Rule("medium", "audit", "No audit device is enabled"),
     "VP-AUDIT-002": Rule("low", "audit", "Only one audit device is enabled"),
     "VP-AUDIT-003": Rule("medium", "audit", "Audit device logs raw values or unhashed token accessors"),
+    "VP-CFG-001": Rule("high", "config", "TCP listener with TLS disabled on a network address"),
+    "VP-CFG-002": Rule("medium", "config", "Listener serves metrics or pprof without a token"),
+    "VP-CFG-003": Rule("low", "config", "Cluster max lease TTL is above Vault's 768h default"),
     "VP-ROLE-001": Rule("high", "roles", "Role can issue tokens with the root policy"),
     "VP-ROLE-002": Rule("medium", "roles", "JWT role is bound only by audience"),
     "VP-ROLE-003": Rule("medium", "roles", "JWT/OIDC role binds claims with a wildcard"),
@@ -838,7 +842,60 @@ def check_security(data: SecurityData, now: datetime, key_age_days: int = KEY_AG
                     hmac_accessor=hmac_accessor,
                 )
             )
+
+    state = data.config_state or {}
+    for listener in state.get("listeners") or []:
+        address = str(listener.get("address") or "")
+        if listener.get("type") == "tcp" and option_flag(listener.get("tls_disable"), False) and not _loopback(f"//{address}"):
+            found.append(
+                finding(
+                    "VP-CFG-001",
+                    "listener",
+                    address,
+                    f"TCP listener `{address}` has TLS disabled and is reachable beyond loopback: tokens and secrets cross the network in clear.",
+                    address=address,
+                )
+            )
+        open_flags = [flag for _, flag in LISTENER_BLOCK_FLAGS if option_flag(listener.get(flag), False)]
+        if open_flags:
+            found.append(
+                finding(
+                    "VP-CFG-002",
+                    "listener",
+                    address,
+                    f"Listener `{address}` allows {' and '.join(f'`{f}`' for f in open_flags)}: anyone who can reach it reads internal state without a token.",
+                    address=address,
+                    flags=open_flags,
+                )
+            )
+    max_ttl = duration_seconds(state.get("max_lease_ttl"))
+    if max_ttl > DEFAULT_MAX_LEASE_TTL:
+        found.append(
+            finding(
+                "VP-CFG-003",
+                "server_config",
+                "sys/config/state/sanitized",
+                f"The cluster max lease TTL is {max_ttl // 3600}h, above Vault's {DEFAULT_MAX_LEASE_TTL // 3600}h default: every token and lease may live this long.",
+                max_lease_ttl_seconds=max_ttl,
+                threshold_seconds=DEFAULT_MAX_LEASE_TTL,
+            )
+        )
     return found
+
+
+def duration_seconds(value: Any) -> int:
+    """Seconds from Vault's TTL forms: an integer, a numeric string, or a Go duration such as "8760h" or "1h30m"."""
+    if isinstance(value, bool):
+        return 0
+    if isinstance(value, int | float):
+        return int(value)
+    text = str(value or "").strip()
+    if text.isdigit():
+        return int(text)
+    parts = re.findall(r"(\d+)([dhms])", text)
+    if not parts or "".join(n + u for n, u in parts) != text:
+        return 0
+    return sum(int(n) * {"d": 86400, "h": 3600, "m": 60, "s": 1}[u] for n, u in parts)
 
 
 def option_flag(value: Any, default: bool) -> bool:
@@ -2020,6 +2077,9 @@ def _summary_metrics(merged: dict[str, Any]) -> str | None:
             rows.append(["External plugins", str(len(plugins))])
         if (devices := security.get("audit_devices")) is not None:
             rows.append(["Audit devices", ", ".join(f"`{d.get('path')}` ({d.get('type')})" for d in devices) or "none"])
+        if (state := security.get("config_state")) is not None:
+            max_ttl = duration_seconds(state.get("max_lease_ttl"))
+            rows.append(["Max lease TTL", f"{max_ttl // 3600}h" if max_ttl else f"default ({DEFAULT_MAX_LEASE_TTL // 3600}h)"])
         if key := security.get("key_status"):
             installed = parse_time(key.get("install_time"))
             rows.append(["Barrier key", f"term {key.get('term')}, installed {installed.strftime('%Y-%m-%d') if installed else 'unknown'}"])
