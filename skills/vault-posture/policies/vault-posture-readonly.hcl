@@ -60,6 +60,11 @@ path "sys/audit" {
   capabilities = ["read", "sudo"]
 }
 
+# Server configuration, sanitized (the script keeps listeners and the lease TTL ceiling only)
+path "sys/config/state/sanitized" {
+  capabilities = ["read"]
+}
+
 # ---- every namespace level
 
 # Namespace discovery

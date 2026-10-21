@@ -58,6 +58,7 @@ ROOT_RULES = [
     (None, "sys/rotate/config", ["read"]),
     (None, "sys/plugins/catalog", ["read"]),
     ("Audit devices: Vault requires sudo even to list them (sudo on a GET changes nothing)", "sys/audit", ["read", "sudo"]),
+    ("Server configuration, sanitized (the script keeps listeners and the lease TTL ceiling only)", "sys/config/state/sanitized", ["read"]),
 ]
 
 # Per namespace level.

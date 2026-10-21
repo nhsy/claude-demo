@@ -76,6 +76,7 @@ def test_collect_security_allowlists_fields(community_reader):
     assert data.key_status == {"term": 1, "install_time": "2024-01-02T03:04:05.123456789Z", "encryptions": 42}
     assert [p["name"] for p in data.plugins] == ["approle", "kv", "custom-db"]
     assert data.audit_devices == [{"path": "file/", "type": "file", "local": False, "options": {"hmac_accessor": "true"}}]
+    assert data.config_state == {"max_lease_ttl": 0, "listeners": [{"type": "tcp", "address": "127.0.0.1:8200", "tls_disable": True}]}
     assert not any(marker in repr(data) for marker in SECRET_MARKERS)
     assert coverage.status("security.generate_recovery_token") == vp.NOT_APPLICABLE
     assert coverage.status("security.rekey_recovery") == vp.NOT_APPLICABLE
@@ -89,6 +90,31 @@ def test_collect_security_denied_catalog():
     data = vp.collect_security(FakeReader(routes), coverage)
     assert data.plugins is None
     assert coverage.status("security.plugin_catalog") == vp.DENIED
+
+
+@pytest.mark.parametrize("block", [lambda flags: [flags], lambda flags: flags])  # HCL blocks: a list of one map, or a map
+def test_collect_security_listener_flags(block):
+    routes = dict(COMMUNITY_ROUTES)
+    listener = {"address": "0.0.0.0:8200", "tls_cert_file": "/etc/vault/tls.crt"}
+    listener["telemetry"] = block({"unauthenticated_metrics_access": True, "prometheus_retention_time": "24h"})
+    listener["profiling"] = block({"unauthenticated_pprof_access": "true"})
+    routes[("sys/config/state/sanitized", False)] = ok({"max_lease_ttl": 31536000, "listeners": [{"type": "tcp", "config": listener}, {"type": "unix", "config": {"address": "/run/vault.sock"}}]})
+    state = vp.collect_security(FakeReader(routes), vp.Coverage()).config_state
+    assert state == {
+        "max_lease_ttl": 31536000,
+        "listeners": [
+            {"type": "tcp", "address": "0.0.0.0:8200", "unauthenticated_metrics_access": True, "unauthenticated_pprof_access": "true"},
+            {"type": "unix", "address": "/run/vault.sock"},
+        ],
+    }
+
+
+def test_collect_security_config_state_denied():
+    routes = dict(COMMUNITY_ROUTES)
+    routes[("sys/config/state/sanitized", False)] = hvac_exc.Forbidden()
+    coverage = vp.Coverage()
+    assert vp.collect_security(FakeReader(routes), coverage).config_state is None
+    assert coverage.status("security.config_state") == vp.DENIED
 
 
 def test_collect_security_audit_devices_empty_or_denied():
