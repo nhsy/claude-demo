@@ -4,7 +4,7 @@
 
 A read-only HashiCorp Vault **security posture** review for Claude Code. Ask Claude whether Vault is configured safely, whether any GitHub Actions or Kubernetes login role is too loose, whether a CA is about to expire, or which policy lets someone write a path. A bundled script reads Vault (GET only) and writes small JSON files; Claude reads them, explains the findings and drafts fixes as text.
 
-It complements [vault-ops](https://github.com/nhsy-hcp/vault-ops-skill) (health, inventory, policies, entities, client counts) and does not repeat its checks.
+It complements [vault-ops](https://github.com/nhsy-hcp/vault-ops-skill) (health, inventory, policies, entities, client counts). Where the two overlap, the rule catalogue names the vault-ops rule that reports the same thing.
 
 ## Prerequisites
 
