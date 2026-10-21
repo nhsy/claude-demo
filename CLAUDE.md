@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This repo is **vault-posture**: a read-only HashiCorp Vault security posture skill for Claude Code, shipped as a plugin (`.claude-plugin/`). The skill lives in `skills/vault-posture/`; everything else is its dev and test harness. It complements the separate vault-ops skill and must not duplicate its checks (health, inventory, policy hygiene, entities, client counts).
+This repo is **vault-posture**: a read-only HashiCorp Vault security posture skill for Claude Code, shipped as a plugin (`.claude-plugin/`). The skill lives in `skills/vault-posture/`; everything else is its dev and test harness. It complements the separate vault-ops skill (health, inventory, policy hygiene, entities, client counts); overlapping with its checks needs the user's confirmation (see "Rules for changing the skill").
 
 ## Use Task for everything
 
@@ -89,6 +89,7 @@ evals/                          claude plugin eval cases and fixtures
   3. a coverage scope via `attempt(...)`, so a denied read is reported, not silently skipped.
 - Keep the split: `collect_*` does I/O and returns a dataclass; `check_*` is pure (takes the dataclass and `now`) and returns `Finding`s. Unit tests target `check_*`; `FakeReader` in `tests/conftest.py` drives `collect_*`.
 - A new rule needs: an entry in `RULES`, a row in `references/rules.md` with a real command (the test enforces the row exists), a firing and a quiet unit test, seeding in `scripts/seed_findings.sh` if a dev server can show it (add it to `SEEDED_RULES` in `tests/test_integration.py`), and a place in the Ranking section.
+- Before adding a check, look for the same check in vault-ops (`skills/vault-ops/references/rules.md` in [nhsy-hcp/vault-ops-skill](https://github.com/nhsy-hcp/vault-ops-skill)). If it exists, name the VT-* rule and ask the user to confirm the overlap before going ahead; then keep the vault-ops severity, so the two skills never disagree, and add a caveat in `references/rules.md` naming the VT-* rule.
 - The script stays one self-contained file: no imports from the rest of the repo. Keep its PEP 723 dependency pins in step with `pyproject.toml`.
 - The `access` evaluator must match Vault. If you change `effective_capabilities` or `parse_policy`, extend `tests/fixtures/policies/` and `EXPECTED` in `tests/test_access.py`; the integration test re-checks every case against `sys/capabilities` on the dev server.
 

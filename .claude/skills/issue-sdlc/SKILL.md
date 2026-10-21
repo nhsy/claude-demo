@@ -120,7 +120,10 @@ claims, plans or builds it, and a person still decides it is ready.
    one does, say so and stop unless the idea says what it adds.
 2. Explore the code without changing it, as in Plan step 3: what main
    already has, which files the change touches, and for a vault-posture
-   change the Vault references in CLAUDE.md.
+   change the Vault references in CLAUDE.md. Look for the same check in
+   vault-ops (CLAUDE.md "Rules for changing the skill"); if it has one,
+   name the VT-* rule and ask the person in this session to confirm the
+   overlap. Without a yes, file nothing.
 3. Check the draft against the definition of ready in CLAUDE.md and the
    not-ready list in Plan step 2. Split anything bigger than one PR into
    several issues that each fit, and link them in Links and context
@@ -132,7 +135,7 @@ claims, plans or builds it, and a person still decides it is ready.
    then the field's text, or `_No response_` for an empty optional one.
    - Acceptance criteria: one `- [ ]` testable statement per line.
    - Out of scope: the files and behaviour that must not change, plus
-     anything CLAUDE.md says to leave to another skill (vault-ops).
+     any vault-ops overlap the person did not confirm.
    - Ready check: one `- [ ]` line per option, copied from the form and
      left unticked: ticking them is the person's sign-off.
    - End the body with the marker line from "What to trust".
@@ -148,7 +151,10 @@ claims, plans or builds it, and a person still decides it is ready.
    scope limits), depends on another open issue that doesn't provide
    what it needs, needs something you can't get (an Enterprise licence,
    a cloud account), or asks for what main already has (search the
-   tests). If anything is missing, comment numbered questions, move the
+   tests). A check vault-ops already has is not by itself a reason to
+   block: unless the issue or a person's comment confirms the overlap,
+   ask for that confirmation as a numbered question. If anything is
+   missing, comment numbered questions, move the
    label from agent-working to agent-blocked, and stop. Never settle a
    contradiction yourself.
 3. Explore the code without changing it, and verify before you plan.
