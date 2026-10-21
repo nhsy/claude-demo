@@ -12,8 +12,10 @@ x-vault: &vault
   cap_add:  # Vault 2.x needs both to start
     - IPC_LOCK
     - SETFCAP
-  # plugin_directory lets `task seed` register a dummy external plugin (VP-PLUG-*).
-  command: ["server", "-dev", "-dev-listen-address=0.0.0.0:8200", "-dev-no-store-token", "-config=/vault/config/dev.hcl"]
+  # compose/dev.hcl: plugin_directory lets `task seed` register a dummy external plugin (VP-PLUG-*),
+  # and its listener and lease ceiling seed VP-CFG-002/003. The image's entrypoint already loads
+  # every file in /vault/config, so no -config flag: a second load would bind the listener twice.
+  command: ["server", "-dev", "-dev-listen-address=0.0.0.0:8200", "-dev-no-store-token"]
   configs:
     - source: vault-dev-config
       target: /vault/config/dev.hcl

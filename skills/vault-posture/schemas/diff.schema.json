@@ -49,6 +49,7 @@
             "security",
             "plugins",
             "audit",
+            "config",
             "roles",
             "pki"
           ]

@@ -103,6 +103,7 @@ def quiet_security(**overrides):
         "rotate_config": {"enabled": True, "interval": 30 * 24 * 3600, "max_operations": 3865470566},
         "plugins": [{"name": "kv", "type": "secret", "version": "v0.1.0+builtin", "builtin": True}],
         "audit_devices": [audit_device("file/"), audit_device("syslog/", "syslog")],
+        "config_state": {"max_lease_ttl": 0, "listeners": [{"type": "tcp", "address": "0.0.0.0:8200"}]},
     }
     base.update(overrides)
     return vp.SecurityData(**base)
@@ -197,6 +198,67 @@ def test_raw_or_unhashed_audit_device_fires_003(options, log_raw, hmac_accessor)
 @pytest.mark.parametrize("options", [{}, {"log_raw": "false", "hmac_accessor": "true"}, {"log_raw": "maybe"}])
 def test_audit_options_at_their_defaults_are_quiet(options):
     assert vp.check_security(quiet_security(audit_devices=[audit_device("a/", **options), audit_device("b/")]), NOW) == []
+
+
+def config(*listeners, max_lease_ttl=0):
+    return {"max_lease_ttl": max_lease_ttl, "listeners": list(listeners)}
+
+
+@pytest.mark.parametrize("address", ["0.0.0.0:8200", "[::]:8200", "10.0.0.5:8200", "vault.example.com:8200"])
+def test_plaintext_listener_on_network_fires_cfg_001(address):
+    found = vp.check_security(quiet_security(config_state=config({"type": "tcp", "address": address, "tls_disable": True})), NOW)
+    assert ids(found) == ["VP-CFG-001"]
+    assert found[0].object_path == address
+
+
+@pytest.mark.parametrize(
+    "listener",
+    [
+        {"type": "tcp", "address": "127.0.0.1:8200", "tls_disable": True},
+        {"type": "tcp", "address": "[::1]:8200", "tls_disable": "true"},
+        {"type": "tcp", "address": "localhost:8200", "tls_disable": True},
+        {"type": "tcp", "address": "0.0.0.0:8200", "tls_disable": False},
+        {"type": "tcp", "address": "0.0.0.0:8200"},
+        {"type": "unix", "address": "/run/vault.sock", "tls_disable": True},
+    ],
+)
+def test_loopback_unix_or_tls_listeners_are_quiet(listener):
+    assert vp.check_security(quiet_security(config_state=config(listener)), NOW) == []
+
+
+def test_string_tls_disable_on_network_fires_cfg_001():
+    assert ids(vp.check_security(quiet_security(config_state=config({"type": "tcp", "address": "0.0.0.0:8200", "tls_disable": "true"})), NOW)) == ["VP-CFG-001"]
+
+
+@pytest.mark.parametrize(
+    ("flags", "expected"),
+    [
+        ({"unauthenticated_metrics_access": True}, ["unauthenticated_metrics_access"]),
+        ({"unauthenticated_pprof_access": "true"}, ["unauthenticated_pprof_access"]),
+        ({"unauthenticated_metrics_access": "true", "unauthenticated_pprof_access": True}, ["unauthenticated_metrics_access", "unauthenticated_pprof_access"]),
+    ],
+)
+def test_unauthenticated_metrics_or_pprof_fires_cfg_002(flags, expected):
+    found = vp.check_security(quiet_security(config_state=config({"type": "tcp", "address": "127.0.0.1:8202", **flags})), NOW)
+    assert ids(found) == ["VP-CFG-002"]
+    assert found[0].evidence == {"address": "127.0.0.1:8202", "flags": expected}
+
+
+def test_authenticated_metrics_are_quiet():
+    listener = {"type": "tcp", "address": "127.0.0.1:8200", "unauthenticated_metrics_access": "false", "unauthenticated_pprof_access": False}
+    assert vp.check_security(quiet_security(config_state=config(listener)), NOW) == []
+
+
+@pytest.mark.parametrize("ttl", [31536000, "8760h", 769 * 3600, "769h0m0s"])
+def test_long_max_lease_ttl_fires_cfg_003(ttl):
+    found = vp.check_security(quiet_security(config_state=config(max_lease_ttl=ttl)), NOW)
+    assert ids(found) == ["VP-CFG-003"]
+    assert found[0].evidence["threshold_seconds"] == 768 * 3600
+
+
+@pytest.mark.parametrize("ttl", [0, None, 768 * 3600, "768h", "24h", "not-a-ttl"])
+def test_default_or_short_max_lease_ttl_is_quiet(ttl):
+    assert vp.check_security(quiet_security(config_state=config(max_lease_ttl=ttl)), NOW) == []
 
 
 def test_unreadable_security_data_is_not_judged():

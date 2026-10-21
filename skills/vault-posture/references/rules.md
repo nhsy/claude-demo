@@ -37,6 +37,16 @@ The same checks, with the same severities, as vault-ops VT-AUD-001..003 (a confi
 | VP-AUDIT-002 | low | Exactly one audit device is enabled (`evidence.device_path`, `evidence.device_type`). If Vault can't write to it (disk full, socket down), Vault refuses every request. | `vault audit enable -path=<second-device> syslog` (or `file file_path=<another-path>`) | vault-ops reports the same as VT-AUD-002. HashiCorp recommends at least two devices; two file devices can't share a `file_path`. |
 | VP-AUDIT-003 | medium | An audit device writes sensitive values in clear (`evidence.log_raw: true`) or token accessors unhashed (`evidence.hmac_accessor: false`). Anyone who can read the log can read secrets or use the accessors. | `vault audit enable -path=<replacement> <type> <options without log_raw or hmac_accessor=false>`, then `vault audit disable <device-path>` | vault-ops reports the same as VT-AUD-003. Options can't be changed in place: add the replacement first so there is never a gap, and treat logs already written as containing secrets. |
 
+## Server configuration
+
+Read from `sys/config/state/sanitized` (root namespace, `read` only). Every remediation is a change to the server configuration file on each node, followed by `kill -HUP <vault-pid>` (listeners reload on SIGHUP) or a rolling restart; the operator confirms the steps for their deployment.
+
+| Rule | Severity | Meaning | Remediation (for an operator to run) | Caveats |
+| --- | --- | --- | --- | --- |
+| VP-CFG-001 | high | A TCP listener (`evidence.address`) has `tls_disable = true` and binds beyond loopback (`0.0.0.0`, `[::]` or a network address). Tokens, secrets and unseal traffic cross the network in clear. | No catalogue command: in the `listener "tcp"` stanza for that address set `tls_cert_file` and `tls_key_file` and remove `tls_disable`, then `kill -HUP <vault-pid>` | A TLS-terminating proxy or load balancer on the same host can make this intended: confirm nothing but the proxy can reach the port. The `-dev` listener always reports `127.0.0.1:8200`, so dev servers never show it. |
+| VP-CFG-002 | medium | A listener (`evidence.address`) allows `unauthenticated_metrics_access` or `unauthenticated_pprof_access` (`evidence.flags`): anyone who can reach it reads metrics or heap and goroutine profiles without a token. | No catalogue command: remove the flag from the listener's `telemetry` or `profiling` block (or move it to a listener only the monitoring network reaches), then `kill -HUP <vault-pid>` | Prometheus scraping can authenticate with a token that has `read` on `sys/metrics`, so the flag is rarely needed. |
+| VP-CFG-003 | low | The cluster `max_lease_ttl` (`evidence.max_lease_ttl_seconds`) is above Vault's 768h default (`evidence.threshold_seconds`): every token and lease, on every mount that doesn't set its own, may live this long. | No catalogue command: lower `max_lease_ttl` in the server configuration (for example `max_lease_ttl = "768h"`) on every node, then restart them one at a time | Existing leases keep their TTL; the lower ceiling applies to new leases and renewals. vault-ops VT-MOUNT-002 compares mounts against this ceiling, so a high value also hides long mount TTLs there. |
+
 ## Auth roles
 
 Role findings carry `namespace`, `evidence.mount` and `evidence.role`; `object.path` is the role's API path. Add `-namespace=<namespace>` to every command for a role outside the root namespace. On these auth methods a `vault write` to an existing role updates only the fields given; the operator should `vault read` the role before and after.
@@ -95,7 +105,7 @@ PKI findings need the `vault-posture-pki-reader` add-on policy; without it the `
 
 When reporting, group in this order:
 
-1. VP-SEC-001 (possible unauthorised root), VP-ROLE-001 (root via login), VP-ROLE-005 (any pod logs in), VP-AWS-001/002 (any AWS account logs in), VP-GCP-001/002 (any GCP project logs in), VP-PKI-001 (expired CA), VP-SEC-002.
-2. VP-ROLE-002/003/006/007, VP-GCP-003, VP-AZURE-001, VP-CERT-001/002 (loose login bindings), VP-LDAP-001/002/003 (LDAP passwords exposed or not checked), VP-PKI-002/006/007, VP-QUOTA-001/002 (no protection from noisy clients or lease explosions), VP-AUDIT-001/003 (no audit trail, or secrets in it).
-3. VP-QUOTA-003, VP-SEC-003, VP-PLUG-001, VP-AUDIT-002 (one audit sink can block every request), VP-ROLE-004/008/009, VP-AWS-003/004, VP-GCP-004, VP-AZURE-002/003, VP-PKI-003/004/005/008.
+1. VP-SEC-001 (possible unauthorised root), VP-CFG-001 (secrets in clear on the network), VP-ROLE-001 (root via login), VP-ROLE-005 (any pod logs in), VP-AWS-001/002 (any AWS account logs in), VP-GCP-001/002 (any GCP project logs in), VP-PKI-001 (expired CA), VP-SEC-002.
+2. VP-ROLE-002/003/006/007, VP-GCP-003, VP-AZURE-001, VP-CERT-001/002 (loose login bindings), VP-LDAP-001/002/003 (LDAP passwords exposed or not checked), VP-PKI-002/006/007, VP-QUOTA-001/002 (no protection from noisy clients or lease explosions), VP-AUDIT-001/003 (no audit trail, or secrets in it), VP-CFG-002 (internal state without a token).
+3. VP-QUOTA-003, VP-SEC-003, VP-PLUG-001, VP-AUDIT-002 (one audit sink can block every request), VP-CFG-003 (long-lived tokens and leases), VP-ROLE-004/008/009, VP-AWS-003/004, VP-GCP-004, VP-AZURE-002/003, VP-PKI-003/004/005/008.
 4. Info: VP-QUOTA-004, VP-SEC-004, VP-PLUG-002.
