@@ -1,8 +1,8 @@
 ---
 name: issue-sdlc
-description: Find the next GitHub issue or PR in the agent- label pipeline and run its SDLC stage (plan, build, fix feedback). Use when asked to work the issue queue.
+description: Find the next GitHub issue or PR in the agent- label pipeline and run its SDLC stage (plan, build, fix feedback), or draft a new pipeline issue from an idea. Use when asked to work the issue queue or file work for it.
 disable-model-invocation: true
-argument-hint: "[issue-or-pr-number]"
+argument-hint: "[issue-or-pr-number | new <idea>]"
 ---
 
 # Issue SDLC
@@ -76,7 +76,9 @@ and they belong to a person. Never stand in for them:
 
 ## 0. Close out merged work
 
-Before finding work, relabel finished issues (bookkeeping, not a stage).
+If $ARGUMENTS starts with `new`, skip steps 0 and 1 and run Draft.
+
+Otherwise, before finding work, relabel finished issues (bookkeeping, not a stage).
 REST only, so it also works where GitHub GraphQL is blocked:
 
 - `gh api "repos/{owner}/{repo}/issues?state=closed&labels=agent-pr-review" --jq '.[].number'`
@@ -106,8 +108,38 @@ wait on a person in agent-plan-review, agent-pr-review and agent-blocked.
 
 For issue stages, claim the issue before any other work:
 `gh issue edit N --remove-label <its label> --add-label agent-working`
+(when a Plan issue still has agent-draft, remove that label too).
 
 ## 2. Run the stage
+
+### Draft (new <idea>)
+The rest of $ARGUMENTS is the idea. Draft files the issue; it never
+claims, plans or builds it, and a person still decides it is ready.
+1. Look for the same work: `gh issue list --state all --search "<keywords>" --json number,title,state,labels`.
+   If an open issue covers it, report that issue and stop; if a closed
+   one does, say so and stop unless the idea says what it adds.
+2. Explore the code without changing it, as in Plan step 3: what main
+   already has, which files the change touches, and for a vault-posture
+   change the Vault references in CLAUDE.md.
+3. Check the draft against the definition of ready in CLAUDE.md and the
+   not-ready list in Plan step 2. Split anything bigger than one PR into
+   several issues that each fit, and link them in Links and context
+   (say which one comes first). If something only the person can decide
+   is missing (scope, a choice between designs), ask them in this
+   session; if they don't answer, file nothing and report the questions.
+4. Write the body with the form's fields, in order: one `### <label>`
+   heading per `body` field of `.github/ISSUE_TEMPLATE/agent-task.yml`,
+   then the field's text, or `_No response_` for an empty optional one.
+   - Acceptance criteria: one `- [ ]` testable statement per line.
+   - Out of scope: the files and behaviour that must not change, plus
+     anything CLAUDE.md says to leave to another skill (vault-ops).
+   - Ready check: one `- [ ]` line per option, copied from the form and
+     left unticked: ticking them is the person's sign-off.
+   - End the body with the marker line from "What to trust".
+5. Title it like the existing issues, `area: imperative summary`
+   (`roles: check SSH secrets engine roles`), at most 72 characters.
+   Create it with `gh issue create --title ... --body-file <file in .tmp/> --label agent-draft`,
+   then delete the body file.
 
 ### Plan (agent-ready)
 1. Read the issue and its comments: `gh issue view N --comments`.
@@ -191,10 +223,13 @@ agent-working to agent-blocked.
 ## 3. Report
 
 One line: the issue or PR, the stage run, the outcome, the new label,
-and any link, plus any issues moved to agent-done in step 0. Then stop.
+and any link, plus any issues moved to agent-done in step 0. For Draft,
+one line per issue filed, ending with "Review it, then swap agent-draft
+for agent-ready". Then stop.
 
 ## Never
 
 Merge PRs, close issues, push to main, force-push anything outside an
-agent/ branch, touch issues without an agent- label, or set the labels a
-person owns (agent-ready, agent-build, agent-fix).
+agent/ branch, touch issues without an agent- label, set the labels a
+person owns (agent-ready, agent-build, agent-fix), or tick an issue's
+Ready check.

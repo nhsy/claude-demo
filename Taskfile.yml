@@ -158,6 +158,7 @@ tasks:
             || gh api -X PATCH "repos/{owner}/{repo}/labels/$1" -f color="$2" -f description="$3" --silent
           echo "label $1"
         }
+        label agent-draft C5DEF5 "Drafted by /issue-sdlc new; a person reviews it and swaps it for agent-ready"
         label agent-ready 0E8A16 "Meets the definition of ready; /issue-sdlc will plan it (set by a person)"
         label agent-working FBCA04 "A Claude Code session holds this issue; other runs skip it"
         label agent-plan-review 1D76DB "Implementation plan posted; waiting for a person to approve"
