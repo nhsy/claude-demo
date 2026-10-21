@@ -57,6 +57,7 @@ task skill:access -- --policy tests/fixtures/policies --path secret/data/app/x -
 task skill:report -- .tmp/vault-posture/*-posture-*.json   # Markdown report from result files
 task dev:down
 task test:e2e                # all of the above on a fresh local dev server
+ENT=1 task test:e2e:compose  # the same on a fresh Enterprise container (VAULT_LICENSE in .env)
 task lint                    # ruff, shellcheck, gitleaks, yaml/json
 ```
 
@@ -66,7 +67,7 @@ task lint                    # ruff, shellcheck, gitleaks, yaml/json
 | Community container | `task up` | `http://127.0.0.1:8250` |
 | Enterprise container (`VAULT_LICENSE` in `.env`) | `task up:ent` | `http://127.0.0.1:8260` |
 
-All are in-memory dev servers with root token `root`. `task seed` (`scripts/seed_findings.sh`) configures one to trip every rule a dev server can show (quotas, a root generation and a rekey in progress, an unversioned external plugin, loose JWT/Kubernetes/AWS/GCP/Azure/cert/AppRole/token roles, a loosely configured LDAP mount with a root-mapped group, short-lived CAs), plus quiet controls. `task token` writes both policies and mints a 1h token into `.tmp/posture-token`.
+All are in-memory dev servers with root token `root`. `task seed` (`scripts/seed_findings.sh`) configures one to trip every rule a dev server can show (quotas, a root generation and a rekey in progress, an unversioned external plugin, loose JWT/Kubernetes/AWS/GCP/Azure/cert/AppRole/token roles, a loosely configured LDAP mount with a root-mapped group, short-lived CAs), plus quiet controls. On Enterprise it also creates nested namespaces `team-a/`, `team-a/prod/` and `team-a/prod/eu/` with a loose role or PKI mount at each level. The edition follows the server, so `task test:e2e` runs the Enterprise assertions too when the local `vault` binary is Enterprise. `task token` writes both policies and mints a 1h token into `.tmp/posture-token`.
 
 ### Tests
 
@@ -81,7 +82,7 @@ All are in-memory dev servers with root token `root`. `task seed` (`scripts/seed
 | `tests/test_readonly.py` | Through real hvac/requests with the transport patched: only GET is sent, namespaces go in the header, no token or secret reaches output |
 | `tests/test_cli.py` | Output files (0600, `.gitignore`), exit codes, setup errors, schema validation |
 | `tests/test_policy.py` | Policies match the generator, grant only read/list, cover every read at every namespace level, keep sensitive paths denied |
-| `tests/test_integration.py` | `-m integration`: seeded dev server, all seeded rules fire and controls stay quiet, coverage complete, writes denied, `access` matches `sys/capabilities` |
+| `tests/test_integration.py` | `-m integration`: seeded dev server, all seeded rules fire and controls stay quiet, coverage complete, writes denied, `access` matches `sys/capabilities`; on Enterprise, findings in each nested namespace |
 
 ### Evals
 
